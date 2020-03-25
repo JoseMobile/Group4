@@ -20,4 +20,66 @@ OneStepSampleTheta <- function(y,V,mu,Sigma){
   theta_i <- rRxNorm(1,y,V,mu, Sigma)
   theta_i
 }
+
+
+# Using slide codes for efficient matrix inversion
+
+#' Solve method for variance matrices.
+#'
+#' @param V Variance matrix
+#' @param x Optional vector or matrix for which to solve system of equations.  If missing calculates inverse matrix.
+#' @param ldV Optionally compute log determinant as well.
+#' @return Matrix solving system of equations and optionally the log-determinant.
+#' @details This function is faster and more stable than `base::solve()` when `V` is known to be positive-definite.
+solveV <- function(V, x, ldV = FALSE) {
+  C <- chol(V) # cholesky decomposition
+  if(missing(x)) x <- diag(nrow(V))
+  # solve is O(ncol(C) * ncol(x)) with triangular matrices
+  # using backward subsitution
+  ans <- backsolve(r = C, x = backsolve(r = C, x = x, transpose = TRUE))
+  if(ldV) {
+    ldV <- 2 * sum(log(diag(C)))
+    ans <- list(y = ans, ldV = ldV)
+  }
+  ans
+}
+
+#' Samples group memberships from a multinomial distribution conditioned on the other parameters 
+#' 
+#' @param theta An 'n x p' matrix, where row i is the parameters of observation i.
+#' @param mu An 'n_cat x p' matrix where the row k is expected value of theta if theta is in class k.
+#' @param rho An 'n_cat x 1' vector of class membership probabilities 
+#' @param Sigma An a list of length 'n_cat', of 'p x p' variance-covariance matrices for each class k.
+#' 
+#' @return An 'n x 1' vector of updated class memberships.
+#' 
+#' @details 
+update_Z <- function(theta, mu, rho, Sigma){
+  # Initialize constants and pre-allocate memory
+  K <- length(rho) 
+  N <- nrow(theta)
+  Kappa <- matrix(NA, nrow=N, ncol=K) 
   
+  # Compute inverses and log-determinants for each covariance matrix
+  inv_sigma <- lapply(Sigma, FUN=function(z){ solveV(z, ldV=TRUE) })
+  
+  # Compute the Kappa matrix 
+  for (i in 1:N){
+    for (k in 1:K){
+      temp <- as.matrix(theta[i, ] - mu[k, ])
+      Kappa[i, k] <- t(temp) %*% inv_sigma[[k]]$y %*% temp
+    }
+  }
+  log_det <- sapply(inv_sigma, FUN=function(z){ z$ldV }) 
+  Kappa <- log(rho) - (Kappa + log_det) / 2 
+  
+  # Compute the matrix of multinomial probabilties
+  Lambda <- exp(Kappa)
+  Lambda <- Lambda / rowSums(Lambda) 
+  
+  # Draw from multinomial N times, each draw of size 1, using different probabilities 
+  Z <- apply(Lambda, MARGIN=1, FUN=function(lambda){ rmultinom(1, 1, lambda)} ) # N x K matrix
+  # Extract class number from matrix of multinomial samples 
+  Z <- apply(Z, MARGIN=1, FUN=function(z){ which(z != 0) }) 
+  
+}
