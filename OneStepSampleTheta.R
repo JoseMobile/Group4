@@ -21,3 +21,29 @@ OneStepSampleTheta <- function(y,V,mu,Sigma){
   theta_i
 }
   
+#' Samples memberships probabilities from a Dirichlet distribution 
+#' 
+#' @param theta An 'n x p' matrix, where row i is the parameters of observation i.
+#' @param mu An 'n_cat x p' matrix where the row k is expected value of theta if theta is in class k.
+#' @param Z An 'n x 1' vector of class memberships for each observation
+#' @param Sigma An a list of length 'n_cat', of 'p x p' variance-covariance matrices for each class k.
+#' 
+#' @return An 'n x 1' vector of updated class membership probabilities.
+#' 
+#' @details 
+update_rho <- function(theta, Z, mu, Sigma){
+  # Initialize constants and pre-allocate memory
+  K <- nrow(mu) 
+  N <- nrow(theta)
+  
+  # Create alpha vector of class counts
+  alpha <- numeric(length=K)
+  for (k in 1:K){
+    alpha[k] <- sum(Z == k) + 1
+  }
+  
+  # Generate tau's 
+  tau <- sapply(alpha, FUN=function(a){ rgamma(1, a, 1) })
+  rho <- tau / sum(tau)
+  return(rho)
+}
