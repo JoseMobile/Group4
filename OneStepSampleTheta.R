@@ -79,7 +79,7 @@ update_Z <- function(theta, mu, rho, Sigma){
   
   # Draw from multinomial N times, each draw of size 1, using different probabilities 
   Z <- apply(Lambda, MARGIN=1, FUN=function(lambda){ rmultinom(1, 1, lambda)} ) # N x K matrix
-  # Extract class number from matrix of multinomial samples 
+  # Extract class number using index from matrix of multinomial samples 
   Z <- apply(Z, MARGIN=1, FUN=function(z){ which(z != 0) }) 
-  
+  return(Z)
 }
