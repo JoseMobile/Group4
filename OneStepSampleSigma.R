@@ -25,6 +25,7 @@ OneStepSampleSigma <- function(theta, mu,N,K){
   }
   # get vector of degrees of freedom
   nu <- N - p - 1
-  riwish(K,Psi = theta_mu,nu = nu)
+  Psi <- theta_mu %*% theta_mu
+  riwish(K,Psi = Psi,nu = nu)
 }
 
