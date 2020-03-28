@@ -44,13 +44,3 @@ sampleMu <- function(theta, Sigma, z) {
   
   return(Mu)
 }
-
-K <- 2
-q <- 2
-n <- 20
-
-theta <- matrix(rnorm(n*q), nrow = n)
-Sigma <- array(rnorm(q*q*K), dim = c(q,q,K))
-z <- rbinom(n, 1, 0.5)
-
-sampleMu(theta, Sigma, z+1)
