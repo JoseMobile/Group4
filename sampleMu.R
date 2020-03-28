@@ -24,15 +24,33 @@ sampleMu <- function(theta, Sigma, z) {
   # iterate through the classes
   for (kk in 1:K) {
     zInd <- ifelse(z == kk, yes = 1, no = 0)  # indicator variable if z_i = k
+    # have to check how many observations of class in z
+    count <- sum(zInd)
+    #### if (count == 0) # exit and have to resample z probably
+    # or maybe just don't change mu?
     
     # Class mean theta has rows of classMeanTheta filled with mean of class
-    classMeanTheta[kk,] <- colMeans(theta[zInd,])
+    if (count > 1) { # more than one observation of class
+      classMeanTheta[kk,] <- colMeans(theta[zInd,])
+    } else { # only one observation of class
+      classMeanTheta[kk,] <- theta[zInd,]
+    }
     
     # Calculating scaled Sigma, divided by count of kk in z
-    Sigma[,,kk] <- sum(z == kk)
+    Sigma[,,kk] <- Sigma[,,kk]/count
   }
   
   Mu <- rmNorm(K, classMeanTheta, Sigma)
   
   return(Mu)
 }
+
+K <- 2
+q <- 2
+n <- 20
+
+theta <- matrix(rnorm(n*q), nrow = n)
+Sigma <- array(rnorm(q*q*K), dim = c(q,q,K))
+z <- rbinom(n, 1, 0.5)
+
+sampleMu(theta, Sigma, z+1)
