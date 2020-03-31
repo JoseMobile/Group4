@@ -3,8 +3,8 @@ require("mniw")
 #' Samples a list of matrices denoting the covariance matrices for each cluster
 #' 
 #' @param A 'n x q' matrix where each row is an observation and the columns are a subset of a larger parameter set.
-#' @param mu An 'k x 1' vector denoting the prior cluster means.
-#' @param N A 'k x 1' vector denoting the counts in each cluster
+#' @param mu An list of K 'p x 1' vectors denoting the column means of a cluster.
+#' @param N A 'K x 1' vector denoting the counts in each cluster
 #' @param K A scalar denoting the number of clusters specified
 #' @return An 'K x 1' list of matrices sampled from the inverse-wishart distribution where the kth matrix
 #' denotes the posterior covariance matrix of the kth cluster   
@@ -18,11 +18,7 @@ require("mniw")
 OneStepSampleSigma <- function(theta, mu,N,K){
   n <- length(theta)
   p <- rep(ncol(theta[1],K)) # vector of scalars where each scalar is the size of any theta_i
-  theta_mu <- vector(mode="list",n) # pre-allocate vector of matrices
-  # obtain theta - mu
-  for (i in (1:n)){
-    theta_mu[[i]] <- theta[[i]] - mu 
-  }
+  theta_mu <- theta - mu # get scale parameter
   # get vector of degrees of freedom
   nu <- N - p - 1
   Psi <- theta_mu %*% theta_mu
