@@ -24,9 +24,9 @@ OneStepSampleTheta <- function(y,V,mu,Sigma){
 #' Samples memberships probabilities from a Dirichlet distribution 
 #' 
 #' @param theta An 'n x p' matrix, where row i is the parameters of observation i.
-#' @param mu An 'n_cat x p' matrix where the row k is expected value of theta if theta is in class k.
+#' @param mu An 'K x p' matrix where the row k is expected value of theta if theta is in class k.
 #' @param Z An 'n x 1' vector of class memberships for each observation
-#' @param Sigma An array of 'p x p x n_cat' of variance-covariance matrices for each class k.
+#' @param Sigma A 'p x p x K' array of variance-covariance matrices for each class k.
 #' 
 #' @return An 'n x 1' vector of updated class membership probabilities.
 #' 
