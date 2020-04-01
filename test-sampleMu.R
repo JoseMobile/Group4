@@ -43,7 +43,7 @@ muBootArray <- array(dim = c(q,q,B)) # allocating space
 
 # bootstrap loop
 for (b in 1:B) {
-  muBootArray[,,b] <- sampleMu(theta, Sigma, z) # generate each sample
+  muBootArray[,,b] <- sampleMu(theta, Sigma, z, matrix(0, K, q)) # generate each sample
 }
 
 muBoot <- matrix(nrow = q, ncol = q) # allocating space for mean of bootstrap
