@@ -47,9 +47,9 @@ solveV <- function(V, x, ldV = FALSE) {
 #' Samples group memberships from a multinomial distribution conditioned on the other parameters 
 #' 
 #' @param theta An 'n x p' matrix, where row i is the parameters of observation i.
-#' @param mu An 'n_cat x p' matrix where the row k is expected value of theta if theta is in class k.
-#' @param rho An 'n_cat x 1' vector of class membership probabilities 
-#' @param Sigma An a list of length 'n_cat', of 'p x p' variance-covariance matrices for each class k.
+#' @param mu An 'K x p' matrix where the row k is expected value of theta if theta is in class k.
+#' @param rho An 'K x 1' vector of class membership probabilities 
+#' @param Sigma A'p x p x K' array of variance-covariance matrices for each class k.
 #' 
 #' @return An 'n x 1' vector of updated class memberships.
 #' 
@@ -61,17 +61,16 @@ update_Z <- function(theta, mu, rho, Sigma){
   Kappa <- matrix(NA, nrow=N, ncol=K) 
   
   # Compute inverses and log-determinants for each covariance matrix
-  inv_sigma <- lapply(Sigma, FUN=function(z){ solveV(z, ldV=TRUE) })
+  inv_sigma <- apply(Sigma, MARGIN=3, FUN=function(z){ solveV(z, ldV=TRUE) })
+  log_det <- sapply(inv_sigma, FUN=function(z){ z$ldV }) 
   
   # Compute the Kappa matrix 
   for (i in 1:N){
     for (k in 1:K){
       temp <- as.matrix(theta[i, ] - mu[k, ])
-      Kappa[i, k] <- t(temp) %*% inv_sigma[[k]]$y %*% temp
+      Kappa[i, k] <- log(rho[k]) - (t(temp) %*% inv_sigma[[k]]$y %*% temp + log_det[k]) / 2
     }
   }
-  log_det <- sapply(inv_sigma, FUN=function(z){ z$ldV }) 
-  Kappa <- log(rho) - (Kappa + log_det) / 2 
   
   # Compute the matrix of multinomial probabilties
   Lambda <- exp(Kappa)
