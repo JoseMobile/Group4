@@ -63,12 +63,13 @@ update_Z <- function(theta, mu, rho, Sigma){
   # Compute inverses and log-determinants for each covariance matrix
   inv_sigma <- apply(Sigma, MARGIN=3, FUN=function(z){ solveV(z, ldV=TRUE) })
   log_det <- sapply(inv_sigma, FUN=function(z){ z$ldV }) 
+  log_rho <- log(rho)
   
   # Compute the Kappa matrix 
   for (i in 1:N){
     for (k in 1:K){
       temp <- as.matrix(theta[i, ] - mu[k, ])
-      Kappa[i, k] <- log(rho[k]) - (t(temp) %*% inv_sigma[[k]]$y %*% temp + log_det[k]) / 2
+      Kappa[i, k] <- log_rho[k] - (t(temp) %*% inv_sigma[[k]]$y %*% temp + log_det[k]) / 2
     }
   }
   
