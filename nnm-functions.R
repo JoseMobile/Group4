@@ -390,7 +390,7 @@ gibbsSamples <- function(y, iter, init_vals, burnin_period=0, mu.fixed = FALSE,
       
       while(TRUE){
         Z<- rcategorical(t(lambda))
-        if (proper_sample(Z)) break 
+        if (proper_sample(Z, K)) break 
       }
       
       if (i > burnin_period)
