@@ -1,5 +1,5 @@
 require(mniw)
-
+require(numbers)
 #' Complete data loglikelihood for the normal-normal-mixture (NNM) model.
 #'
 #' @param mu A `K x p` matrix of group means, where `K` is the number of mixture components and `p` is the dimension of each observation.
@@ -9,7 +9,8 @@ require(mniw)
 #' @param V A `p x p x N` matrix of variances corresponding to each observation.
 #' @param theta A `p x N` matrix of observation means.
 #' @param z A length-`N` vector of integers between 1 and `K` indicating the group membership of each column of `theta`.
-nnm_loglik <- function(mu, Sigma, rho, y, V, theta, z) {
+#' @param log bool value indicating whether to give log value of distribution 
+nnm_loglik <- function(mu, Sigma, rho, y, V, theta, z, log=TRUE) {
   K <- nrow(mu) # number of groups
   N <- nrow(y)
   ll <- 0
@@ -25,7 +26,35 @@ nnm_loglik <- function(mu, Sigma, rho, y, V, theta, z) {
     }
   }
   # observation contribution
-  ll + sum(dmNorm(y, mu = t(theta), Sigma = V, log = TRUE))
+  ll<- ll + sum(dmNorm(y, mu = t(theta), Sigma = V, log = TRUE))
+  
+  if (!log) {
+    ll<- exp(ll)
+  }
+  
+  ll
+}
+
+#' Complete data loglikelihood for the normal-normal-mixture (NNM) model.
+#'
+#' @param mu A `K x p` matrix of group means, where `K` is the number of mixture components and `p` is the dimension of each observation.
+#' @param Sigma A `p x p x K` matrix of group variances.
+#' @param rho A length-`K` probability vector of group membership.
+#' @param y An `N x p` matrix of observations, each of which is a column.
+#' @param V A `p x p x N` matrix of variances corresponding to each observation.
+#' @param theta A `p x N` matrix of observation means.
+#' @param z A length-`N` vector of integers between 1 and `K` indicating the group membership of each column of `theta`.
+#' @param vk A length- `K` vector of integers acting as virtual counts from prior 
+#' @param log bool value indicating whether to give log value of distribution 
+nnm_post <- function(mu, Sigma, rho, y, V, theta, z, vk, log=TRUE) {
+  K<- nrow(mu)
+  ll<- nnm_loglik(mu, Sigma, rho, y, V, theta, z)
+  for(i in 1:K){
+    ll<- ll - 0.5* vk[i]*log(det(Sigma[,,i]))
+  }
+  if (!log) {ll <- exp(ll)}
+  
+  ll 
 }
 
 #normalized conditional log-pdf
@@ -34,12 +63,52 @@ nnm_loglik <- function(mu, Sigma, rho, y, V, theta, z) {
 #' @param Sigma A `p x p x K` matrix of group variances.
 #' @param z A length-`N` vector of integers between 1 and `K` indicating the group membership of each column of `theta`.
 #' @param k An integer value beween 1 and `K` to ondicate which mu to condition on 
-mu_k.loglik<-function(theta, mu, Sigma, z, k){
+#' @param log bool value indicating whether to give log value of distribution 
+mu_k.post<-function(theta, mu, Sigma, z, k, log=TRUE){
   mu_k <- mu[k,]
+  Sigma_k <- Sigma[,,k]
   tidx <-  tidx<-(k == z)
   Nk<- sum(tidx)
-  sum(dmNorm(t(theta[,tidx]), log = TRUE,
-                 mu = matrix(rep(mu_k, Nk), nrow=Nk, ncol=p, byrow=TRUE), Sigma = array(rep(Sigma[,,k], Nk), dim=c(p,p,Nk)) ))
+  theta_avg_k<- theta[,tidx]  
+  
+  if (Nk > 1){
+    theta_avg_k<-rowMeans(theta[,tidx])
+  }
+  
+  theta_avg_k<-as.vector(theta_avg_k)
+  #ll<-sum(dmNorm(t(theta[,tidx]), log = TRUE,
+   #              mu = matrix(rep(mu_k, Nk), nrow=Nk, ncol=p, byrow=TRUE), Sigma = array(rep(Sigma[,,k], Nk), dim=c(p,p,Nk)) ))
+  
+  ll<-dmNorm(mu_k, theta_avg_k, Sigma_k/Nk, log=TRUE)
+  
+  if(!log){
+    ll<-exp(ll)
+  }
+  
+  ll
+}
+
+#' @param theta A `p x N` matrix of observation means.
+#' @param marginal_idx 
+#' @param Sigma A `p x p x K` matrix of group variances.
+#' @param z A length-`N` vector of integers between 1 and `K` indicating the group membership of each column of `theta`.
+#' @param k An integer value beween 1 and `K` to ondicate which mu to condition on 
+mu_k_marginals.param<-function(theta, marginal_idx, Sigma, z, k){
+  
+  Sigma_k <- Sigma[,,k]
+  tidx <-  tidx<-(k == z)
+  Nk<- sum(tidx)
+  theta_avg_k<- theta[,tidx]  
+  
+  if (Nk > 1){
+    theta_avg_k<-rowMeans(theta[,tidx])
+  }
+  
+  theta_avg_k<-as.vector(theta_avg_k)
+  Sigma_k <- Sigma_k/Nk
+  
+  params<- list(mean= theta_avg_k[marginal_idx], sd=sqrt(Sigma_k[marginal_idx, marginal_idx]))
+  params
 }
 
 #' @param y An `N x p` vector of observations, each of which is a column.
@@ -49,7 +118,8 @@ mu_k.loglik<-function(theta, mu, Sigma, z, k){
 #' @param Sigma A `p x p x K` matrix of group variances.
 #' @param Z A length- `N` vector of integers between 1 and `K`
 #' @param rand_idx scalar value netween `1` and `N` to indicate which theta to condition on 
-theta_i.loglik<-function(y, theta, V, mu, Sigma, Z, rand_idx){
+#' @param log bool value indicating whether to give log value of distribution 
+theta_i.post<-function(y, theta, V, mu, Sigma, Z, rand_idx, log=TRUE){
   y_i <- y[rand_idx,]
   theta_i<- theta[,rand_idx]
   V_i<- V[,, rand_idx]
@@ -57,33 +127,54 @@ theta_i.loglik<-function(y, theta, V, mu, Sigma, Z, rand_idx){
   Sigma_zi <- Sigma[,,z_i]
   mu_zi <- mu[z_i,]
   
-  ll<- 0 
-  ll<- ll + dmNorm(theta_i,  mu = mu_zi, Sigma = Sigma_zi, log = TRUE )
-  ll<- ll  + dmNorm(y_i, mu = theta_i, Sigma = V_i, log=TRUE )
+  #ll<- dmNorm(theta_i,  mu = mu_zi, Sigma = Sigma_zi, log = TRUE ) 
+  #ll<- ll + dmNorm(y_i, mu = theta_i, Sigma = V_i, log=TRUE )
+  
+  G_i <- Sigma_zi %*% solveV(V_i + Sigma_zi)
+  new_mu <- G_i  %*% (y_i - mu_zi) + mu_zi
+  new_V <- G_i  %*% V_i 
+  
+  new_mu<-as.vector(new_mu)
+  ll<- dmNorm(theta_i, new_mu, new_V, log=TRUE)
+  
+  if(!log){
+    ll<-exp(ll)
+  }
+  
   ll
 }
 
 #' @param theta A `p x N` matrix of observation means.
 #' @param mu A `K x p` matrix of group means, where `K` is the number of mixture components and `p` is the dimension of each observation.
 #' @param Sigma A `p x p x K` matrix of group variances.
-#' @param Z A length- `N` vectir of integers between 1 and `K`
+#' @param Z A length- `N` vector of integers between 1 and `K`
 #' @param k An integer value beween 1 and `K` to indicate which Sigma to condition on 
-sigma_k.loglik<-function(theta, mu, Sigma, Z, k){
-  ll<- 0 
+#' @param vk A length- `K` vector of integers acting as virtual counts from prior 
+#' @param log bool value indicating whether to give log value of distribution 
+sigma_k.post<-function(theta, mu, Sigma, Z, k, vk, log=TRUE){
   Sigma_k <- Sigma[,, k]
   Sigma_inv<- solveV(Sigma_k)
   mu_k <- mu[k, ]
+  vkk<- vk[k]
   tidx<- (Z == k)
   Nk<- sum(tidx)
   theta_less_mu <- theta[,tidx] - mu_k
-  ll<- ll - 0.5* sum(diag(Sigma_inv %*% (theta_less_mu %*% t(theta_less_mu))))
-  ll <- ll - 0.5*Nk*log(det(Sigma_k))
+  ll <- diwish(Sigma_k, (theta_less_mu %*% t(theta_less_mu)) ,  Nk + vkk -p -1, log = TRUE)
+  
+  #ll<- ll - 0.5* sum(diag(Sigma_inv %*% (theta_less_mu %*% t(theta_less_mu))))
+  #ll <- ll - 0.5*(Nk + vkk)*log(det(Sigma_k))
+  
+  if (!log){
+    ll<-exp(ll)
+  } 
+  
   ll
 }
 
 #' @param Z A length- `N` vectir of integers between 1 and `K`
 #' @param rho A length-`K` probability vector of group membership.
-rho.loglik<-function(Z, rho){
+#' @param log bool value indicating whether to give log value of distribution 
+rho.post<-function(Z, rho, log=TRUE){
   K<- length(rho)
   Nk<- rep(0, K)
   log_rho <- log(rho)
@@ -91,7 +182,13 @@ rho.loglik<-function(Z, rho){
     tidx<- (j == Z)
     Nk[j] <- sum(tidx)
   }
-  sum(Nk*log_rho)
+  #ll<-sum(Nk*log_rho)
+  ll<-ddirichlet(rho, Nk + 1, log=TRUE)
+  
+  if (!log)
+    ll<-exp(ll)
+  
+  ll
 }
 
 #' @param Z A length- `N` vectir of integers between 1 and `K`
@@ -100,7 +197,8 @@ rho.loglik<-function(Z, rho){
 #' @param mu A `K x p` matrix of group means, where `K` is the number of mixture components and `p` is the dimension of each observation.
 #' @param Sigma A `p x p x K` matrix of group variances.
 #' @param rand_idx A scalar value bewteen `1` and `N` to indicate which z to condtion on. 
-z.loglik<-function(Z, rho, theta, mu, Sigma, rand_idx){
+#' @param log bool value indicating whether to give log value of distribution 
+z.post<-function(Z, rho, theta, mu, Sigma, rand_idx, log=TRUE){
   ll<-0 
   z_i <- Z[rand_idx]
   theta_i <- theta[, rand_idx]
@@ -110,6 +208,10 @@ z.loglik<-function(Z, rho, theta, mu, Sigma, rand_idx){
   mu_k <- mu[z_i,]
   
   ll<- ll + dmNorm(theta_i, mu= mu_k, Sigma= Sigma_k, log=TRUE)
+  
+  if (!log)
+    ll<-exp(ll)
+  
   ll
 }
 
@@ -175,75 +277,144 @@ solveV <- function(V, x, ldV = FALSE) {
   ans
 }
 
-#unfinished Sampler 
-gibbsSamples <- function(y, K, iter, init_vals ){
+#' @param Z A length- `N` vector of integers between 1 and `K`
+#' @param k An integer value beween 1 and `K` to indicate which Sigma to condition on 
+proper_sample<-function(Z, K){
+  result<-TRUE
+  for (i in 1:K){
+    if (sum(Z == i) == 0){
+      result<- FALSE
+    }
+  }
+  result 
+}
+
+
+#' @param y
+#' @param iter
+#' @param init_vals
+#' @param burnin_period
+#' @param mu.fixed
+#' @param Sigma.fixed
+#' @param theta.fixed
+#' @param rho.fixed
+#' @param Z.fixed
+#' @param z_out
+gibbsSamples <- function(y, iter, init_vals, burnin_period=0, mu.fixed = FALSE, 
+                         Sigma.fixed =FALSE, theta.fixed= FALSE, rho.fixed = FALSE, Z.fixed = FALSE, z_out = FALSE ){
   N<-nrow(y)
   p<-ncol(y)
-  
-  mu_Iter<-array(rep(0, iter*K*p), dim=c(iter, K, p))
-  mu_Iter[1,,]<- init_vals$mu 
-  
-  Sigma_Iter<-array(rep(0, iter*K*p*p), dim=c(iter, p, p, K))
-  Sigma_Iter[1,,,]<-init_vals$Sigma 
-  
-  rho_Iter<-array(rep(0, iter*K), dim=c(iter, K))
-  rho_Iter[1,]<-init_vals$rho 
-  
-  V_Iter<-array(rep(0, iter*N*p*p), dim=c(iter, p, p, N))
-  V_Iter[1,,,]<-init_vals$V 
-  
-  theta_Iter<-array(rep(0, p*N*iter), dim=c(iter,p,N))
-  theta_Iter[1,,]<-init_vals$theta 
-  
-  z_Iter<-array(rep(0, N*iter), dim=c(iter,N))
-  z_Iter[1,]<-init_vals$z
-  
-  for( i in 2:iter){
-    theta_Iter[i,,]<-rRxNorm(1, y, V_Iter[i-1,,,], mu_Iter[i-1,,], Sigma[i-1,,,])
-    ###############################################################################
-    Nk<-rep(0, 10)
-    theta_avg_k<- matrix(rep(0, K*p), nrow=K, ncol=p)
-    for(j in 1:K){
-      tidx<- (j == z_Iter[i-1,])
-      Nk[j]<- sum(tidx)
-      theta_avg_k[j,]<-rowMeans(theta_Iter[i,,tidx])
-    }
-    mu_Iter[i,,]<-rmNorm(1, theta_avg_k, Sigma[i-1,,,]/Nk)
-    ###############################################################################
-    Psi<-array(rep(0, K*p*p), dim=c(p,p,K))
-    for(j in 1:K){
-      tidx<- (j == z_Iter[i-1,])
-      cur_theta<-theta_Iter[i,,]
-      cur_theta_k<- cur_theta[,tidx] - mu_Iter[i,j,]
-      Psi[,,i]<- cur_theta_k %*% t(cur_theta_k)
-    }
-    Sigma_Iter[i,,,]<-riwish(1, Psi, Nk-p-1)
-    ################################################################################
-    alpha<-Nk+1 
-    rho_Iter[i,]<-rdirichlet(1, alpha)
-    ###############################################################################
-    kappa<-matrix(rep(0, K*N), nrow=N, ncol=K)
-    Sigma_inv<-array(rep(0, K*p*p), dim=c(p, p, K))
-    
-    for(j in 1:K){
-      Sigma_inv[,,j]<- solveV(Sigma_Iter[i,,,j])
-      log_rho_k<-log(rho_Iter[i,j])
-      log_det_k<-log(det(Psi[,,j]))
 
-      for (n in 1:N){
-        theta_sub_mu <- theta_Iter[i,,n] - mu_Iter[i,j,] 
-        kappa[n,j]<- log_rho_k - 0.5 *( t(theta_sub_mu) %*% Sigma_inv[,,j] %*% theta_sub_mu + log_det_k)
-      }
-    }
-    
-    lambda<- exp(kappa)
-    assert(sum(is.na(lambda)) == 0)
-    
-    for(n in 1:N){
-      total_exp <- sum(lambda[n,])
-      lambda[n,] = lambda[n,]/ total_exp
-    }
-    Z_iter[i,] <- rcategorical(t(lambda))
+  if(missing(burnin_period)) burnin_period <- min(floor(iter/10), 1e3)
+  mu <- init_vals$mu  
+  K<- nrow(mu)
+  Sigma <-init_vals$Sigma 
+  rho <-init_vals$rho  
+  V <-init_vals$V 
+  theta -init_vals$theta 
+  Z <-init_vals$Z
+  vk<init_vals$vk 
+  
+  mu_samples<- array(NA, dim= c(iter, K, p))
+  Sigma_samples<- array(NA, dim = c(iter, p,p, K))
+  rho_samples<- array(NA, dim= c(iter, N))
+  theta_samples<-array(NA, dim = c(iter, p, N))
+  
+  if (z_out){
+    Z_samples<- matrix (NA, dim = c(iter, N) )
   }
+  
+  lambda_est <- matrix(rep(0, N*K), nrow=N, ncol=K)
+  stopifnot(proper_sample(Z, K))
+  
+  for(i in 1:(iter+burnin_period)){
+    
+    if ( mod(i, 500) == 0) {
+      cat("Iteration #", i, "\n")
+    }
+    
+    if (!theta.fixed){
+      theta <-rRxNorm(N, y, V, mu, Sigma)
+    }
+    ###############################################################################
+    if (!mu.fixed){
+      Nk<-rep(0, K)
+      theta_avg_k<- matrix(rep(0, K*p), nrow=K, ncol=p)
+      Sigma_cpy <-Sigma 
+      
+      for(j in 1:K){
+        tidx<- (j == Z)
+        Nk[j]<- sum(tidx)
+        if (Nk[j] == 1)
+          theta_avg_k[j,]<- theta[,tidx]  
+        else
+          theta_avg_k[j,]<-rowMeans(theta[,tidx])
+        
+        Sigma_cpy[,,j]<- Sigma_cpy[,,j]/Nk[j]
+      }
+      
+      mu<-rmNorm(K, theta_avg_k, Sigma_cpy)
+    }
+    ###############################################################################
+    if (!Sigma.fixed){
+      outer_prod<-array(rep(0, K*p*p), dim=c(p,p,K))
+      for(j in 1:K){
+        tidx<- (j == Z)
+        cur_theta<-theta
+        cur_theta_less_mu<- cur_theta[,tidx] - mu[j,]
+        outer_prod[,,i]<- cur_theta_less_mu %*% t(cur_theta_less_mu)
+      }
+      Sigma<-riwish(K, outer_prod, Nk + vk -p-1)
+    }
+    ################################################################################
+    if (!rho.fixed){
+      alpha<-Nk+1 
+      rho<-rdirichlet(1, alpha)
+    }
+    ###############################################################################
+    if(!Z.fixed){
+      kappa<-matrix(rep(0, K*N), nrow=N, ncol=K)
+  
+      for(j in 1:K){
+        for (n in 1:N){
+          kappa[n,j]<- z.post(Z, rho, theta, mu, Sigma, n)
+        }
+      }
+      
+      lambda<- exp(kappa)
+      
+      for(n in 1:N){
+        total_exp <- sum(lambda[n,])
+        lambda[n,] = lambda[n,]/ total_exp
+      }
+      
+      while(TRUE){
+        Z<- rcategorical(t(lambda))
+        if (proper_sample(Z)) break 
+      }
+      
+      if (i > burnin_period)
+        lambda_est<- (lambda_est*(new_idx -1) + lambda)/new_idx
+    }
+    ###############################################################################
+    
+    if (i > burnin_period){
+      new_idx <- i-burnin_period
+      mu_samples[new_idx,,]<-mu 
+      Sigma_samples[new_idx,,,]<- Sigma
+      rho_samples[new_idx,]<- rho
+      theta_samples[new_idx,,]<- theta
+      
+      if (z_out)
+        Z_samples[new_idx,] <- Z
+    }
+  }
+  
+  final_output<-list(mu= mu_samples,  Sigma= Sigma_samples, theta= theta_samples, rho = rho_samples, lambda = lambda_est)
+  
+  if (z_out)
+    final_output<-c(final_output, list(Z = Z_samples))
+  
+  final_output
 }
 
