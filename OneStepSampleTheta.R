@@ -55,7 +55,7 @@ solveV <- function(V, x, ldV = FALSE) {
 #' @return An 'n x 1' vector of updated class memberships, or if give.Lambda=TRUE, returns a list that contains the 'n x 1' updated class memberships and the computed 'n x k' Lambda matrix.
 #' 
 #' @details 
-update_Z <- function(theta, mu, rho, Sigma, give.Lambda=FALSE){
+update_z <- function(theta, mu, rho, Sigma, give.Lambda=FALSE){
   # Initialize constants and pre-allocate memory
   K <- length(rho) 
   N <- nrow(theta)
