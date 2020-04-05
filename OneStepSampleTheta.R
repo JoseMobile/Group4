@@ -50,11 +50,12 @@ solveV <- function(V, x, ldV = FALSE) {
 #' @param mu An 'K x p' matrix where the row k is expected value of theta if theta is in class k.
 #' @param rho An 'K x 1' vector of class membership probabilities 
 #' @param Sigma A'p x p x K' array of variance-covariance matrices for each class k.
+#' @param give.Lambda A T/F value indicating whether Lambda matrix of probabilities should be returned as well
 #' 
-#' @return An 'n x 1' vector of updated class memberships.
+#' @return An 'n x 1' vector of updated class memberships, or if give.Lambda=TRUE, returns a list that contains the 'n x 1' updated class memberships and the computed 'n x k' Lambda matrix.
 #' 
 #' @details 
-update_Z <- function(theta, mu, rho, Sigma){
+update_Z <- function(theta, mu, rho, Sigma, give.Lambda=FALSE){
   # Initialize constants and pre-allocate memory
   K <- length(rho) 
   N <- nrow(theta)
@@ -81,5 +82,11 @@ update_Z <- function(theta, mu, rho, Sigma){
   Z <- apply(Lambda, MARGIN=1, FUN=function(lambda){ rmultinom(1, 1, lambda)} ) # N x K matrix
   # Extract class number using index from matrix of multinomial samples 
   Z <- apply(Z, MARGIN=1, FUN=function(z){ which(z != 0) }) 
-  return(Z)
+  
+  if (give.Lambda){
+    return(list(z=Z, Lambda=Lambda))
+  }
+  else{
+    return(Z)
+  }
 }
