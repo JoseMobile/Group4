@@ -7,13 +7,13 @@ require("mniw")
 #' @param theta Estimated random effects of the mixture-normal model. A `n x p` matrix. 
 #' @param Sigma Variance matricies of theta. A `p x p x K` array.
 #' @param z Estimated classes of the y values. A `n x 1` vector.
-#' @param currMu Current estimated mu. A `K x p` matrix. 
+#' @param old_mu Current estimated mu. A `K x p` matrix. 
 #' @details `K` is the number of classes. `p` is the dimension of one observations of `theta_i`, i.e. the number of features. `n` is the number of observations. If a class `k` does not appear in the z vector, the `k`th row of the return matrix is the `k`th row of currMu. If a class has no observations in the z vector this mu is not updated because having a count of zero causes a division by zero.
 #' @return A `K x 1` vector of randomly sampled `mu_k` values from the distribution `mu_k ~ Normal(theta_k, Sigma_k/N_k)`
 #' ```
 #' where `theta_k` is the mean of all `theta_i`s where `z_i = k` and `N_k` is the number of `z_i = k` (sum of indicator `z_k = k`).
 #' 
-sampleMu <- function(theta, Sigma, z, currMu) {
+update_mu <- function(theta, Sigma, z, currMu) {
   # number of classes, K. number of features, q
   SigmaDim <- dim(Sigma)
   K <- SigmaDim[3]  # qxqx*K*

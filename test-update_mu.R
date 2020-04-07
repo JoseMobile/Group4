@@ -1,5 +1,5 @@
 require("mniw")
-source("sampleMu.R")
+source("update_mu.R")
 source("nnm-functions.R")
 
 #' Function to simulate data for the Model-Based Clustering problem
@@ -99,7 +99,7 @@ hyp_test <- array(dim = c(K, q, num_sim)) # array to hold hypothesis tests
 save_par <- par()
 par(mfrow = c(K,q/2)) # set grid of graphs so can show all histograms
 for (rep in 1:num_sim) { # find hypothesis test values
-  mu <- sampleMu(theta, Sigma, z, currMu = matrix(0, K, q))
+  mu <- update_mu(theta, Sigma, z, currMu = matrix(0, K, q))
   
   for (k in 1:K) { # iterate through rows of mu, classes
     mu_trans <- chol_inv[,,k] %*% (simData$mu[k,] - theta_mean[k,]) # transform mu to be uncorrelated
@@ -156,7 +156,7 @@ for (ii in 1:n) {
 
 # sample mu by giving a matrix of zeros as the current mu
 # this should have the last row (K) should always be zero
-currMu <- matrix(rnorm(K*q), K, q) # Kxq matrix to give to sampleMu
-Mu <- sampleMu(theta, Sigma, z, currMu)
+currMu <- matrix(rnorm(K*q), K, q) # Kxq matrix to give to update_mu
+Mu <- update_mu(theta, Sigma, z, currMu)
 Mu[K,] - currMu[K,] # should be zero
 
