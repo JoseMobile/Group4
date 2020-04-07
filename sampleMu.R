@@ -4,11 +4,11 @@ require("mniw")
 
 #' Conditional update for `mu_k` by randomly sampling from the Multivariate Normal model with mean theta and variance proportional to Sigma (see details).
 #' 
-#' @param theta Estimated random effects of the mixture-normal model. A `n x q` matrix. 
-#' @param Sigma Variance matricies of theta. A `q x q x K` array.
+#' @param theta Estimated random effects of the mixture-normal model. A `n x p` matrix. 
+#' @param Sigma Variance matricies of theta. A `p x p x K` array.
 #' @param z Estimated classes of the y values. A `n x 1` vector.
-#' @param currMu Current estimated mu. A `K x q` matrix. 
-#' @details `K` is the number of classes. `q` is the dimension of one observations of `theta_i`, i.e. the number of features. `n` is the number of observations. If a class `k` does not appear in the z vector, the `k`th row of the return matrix is the `k`th row of currMu. If a class has no observations in the z vector this mu is not updated because having a count of zero causes a division by zero.
+#' @param currMu Current estimated mu. A `K x p` matrix. 
+#' @details `K` is the number of classes. `p` is the dimension of one observations of `theta_i`, i.e. the number of features. `n` is the number of observations. If a class `k` does not appear in the z vector, the `k`th row of the return matrix is the `k`th row of currMu. If a class has no observations in the z vector this mu is not updated because having a count of zero causes a division by zero.
 #' @return A `K x 1` vector of randomly sampled `mu_k` values from the distribution `mu_k ~ Normal(theta_k, Sigma_k/N_k)`
 #' ```
 #' where `theta_k` is the mean of all `theta_i`s where `z_i = k` and `N_k` is the number of `z_i = k` (sum of indicator `z_k = k`).
@@ -29,7 +29,7 @@ sampleMu <- function(theta, Sigma, z, currMu) {
   
   # iterate through the classes
   for (kk in 1:K) {
-    zInd <- ifelse(z == kk, yes = 1, no = 0)  # indicator variable if z_i = k
+    zInd <- (z == kk)  # indicator variable if z_i = k
     # have to check how many observations of class in z
     count <- sum(zInd)
     
