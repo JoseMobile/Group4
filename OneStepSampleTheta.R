@@ -78,10 +78,19 @@ update_z <- function(theta, mu, rho, Sigma, give.Lambda=FALSE){
   Lambda <- exp(Kappa)
   Lambda <- Lambda / rowSums(Lambda) 
   
-  # Draw from multinomial N times, each draw of size 1, using different probabilities 
-  Z <- apply(Lambda, MARGIN=1, FUN=function(lambda){ rmultinom(1, 1, lambda)} ) # N x K matrix
-  # Extract class number using index from matrix of multinomial samples 
-  Z <- apply(Z, MARGIN=1, FUN=function(z){ which(z != 0) }) 
+  # Keep re-sampling until at least one observation in each cluster
+  while(TRUE){
+    # Draw from multinomial N times, each draw of size 1, using different probabilities 
+    Z <- apply(Lambda, MARGIN=1, FUN=function(lambda){ rmultinom(1, 1, lambda)} ) # N x K matrix
+    # Extract class number using index from matrix of multinomial samples 
+    Z <- apply(Z, MARGIN=1, FUN=function(z){ which(z != 0) }) 
+
+    # Extract class counts 
+    counts <- table(Z) 
+    if (!(any(Z == 0))){
+      break
+    }
+  }
   
   if (give.Lambda){
     return(list(z=Z, Lambda=Lambda))
