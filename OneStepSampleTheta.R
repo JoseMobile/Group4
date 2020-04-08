@@ -87,7 +87,7 @@ update_z <- function(theta, mu, rho, Sigma, give.Lambda=FALSE){
 
     # Extract class counts 
     counts <- table(Z) 
-    if (!(any(Z == 0))){
+    if (!(any(counts == 0))){
       break
     }
   }
