@@ -57,10 +57,10 @@ gibbsSampler <- function(data, K, M=1000, theta=NULL, mu=NULL, rho=NULL, Sigma=N
      
      # Update Sigma
      
-     # Update rho
+     # Update rho, a K x 1 vector
      new_rho <- update_rho(old_theta, old_z, old_mu, old_Sigma)
      
-     # Update z 
+     # Update z, an N x 1 vector
      new_z <- update_z(old_theta, old_mu, old_rho, old_Sigma, give.Lambda=TRUE)
      
      # Update all values
