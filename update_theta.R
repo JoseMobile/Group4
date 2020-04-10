@@ -8,6 +8,9 @@ require("mniw")
 #' @param Sigma A `p x p x K` array of covariance matricies. The k-th matrix is the covariance matrix for theta in class k.
 #' @param z A lenght `n` vector for the class observations of y.
 #' @details `n` is the number of observations of y. `p` is the dimension of each theta, i.e. the number features of the data. `K` is the number of possible classes of y. 
+#' @return A `n x p` matrix. A random sample from the random effects multivariate normal distribution. If the return value is called theta then the details are as follows:
+#' theta ~ N(mu, Sigma)
+#' y | theta ~ N(theta, V)
 #'
 #'
 update_theta <- function(y, V, mu, Sigma, z) {
