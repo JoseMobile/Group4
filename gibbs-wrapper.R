@@ -16,7 +16,7 @@
 #' 
 #' @details 
 
-gibbsSampler <- function(data, K, M=1000, theta=NULL, mu=NULL, rho=NULL, Sigma=NULL, z=NULL){
+gibbsSampler <- function(data, K, M=1000, theta=NULL, mu=NULL, rho=NULL, Sigma=NULL, z=NULL, z_out = FALSE){
   # Check if arguments are NULL, and create initial values 
   if (is.null(mu)){
   
@@ -28,6 +28,9 @@ gibbsSampler <- function(data, K, M=1000, theta=NULL, mu=NULL, rho=NULL, Sigma=N
   
   N <- nrow(theta)
   total_Lambda <- matrix(0, nrow=N, ncol=K)
+
+  z_all <- NA # bringing z_all into scope
+  if (z_out) z_all <- matrix(nrow = M, ncol = N) # allocating space if needed
   
   # Create Defaults 
   
@@ -47,30 +50,37 @@ gibbsSampler <- function(data, K, M=1000, theta=NULL, mu=NULL, rho=NULL, Sigma=N
   # Compute V
   
   for (m in 1:M){
-     # Call the update functions
-     #  Check the dimensions of the return values match the other functions 
-     
-     # Update theta, 
-     
-     # Update mu, a 'K x p' matrix of class averages of theta
-     new_mu <-  
-     
-     # Update Sigma
-     
-     # Update rho, a K x 1 vector
-     new_rho <- update_rho(old_theta, old_z, old_mu, old_Sigma)
-     
-     # Update z, an N x 1 vector
-     new_z <- update_z(old_theta, old_mu, old_rho, old_Sigma, give.Lambda=TRUE)
-     
-     # Update all values
-     old_theta <- new_theta
-     old_mu <- new_mu
-     old_Sigma <- new_Sigma
-     old_rho <- new_rho
-     old_z <- new_z 
-     
-     total_Lambda <- total_Lambda + new_z$Lambda
+    # Call the update functions
+    #  Check the dimensions of the return values match the other functions 
+    
+    # Update theta, a 'N x p' matrix of random effects of y
+    new_theta <- update_theta(y, V, old_mu, old_Sigma, old_z)
+    
+    # Update mu, a 'K x p' matrix of class averages of theta
+    new_mu <- update_mu(old_theta, old_Sigma, old_z)
+    
+    # Update Sigma, a 'p x p x K' array of covariance matricies
+    new_Sigma <- update_Sigma(old_theta, old_mu, old_z)
+    
+    # Update rho, a K x 1 vector
+    new_rho <- update_rho(old_theta, old_z, old_mu, old_Sigma)
+    
+    # Update z, an N x 1 vector
+    new_z <- update_z(old_theta, old_mu, old_rho, old_Sigma, give.Lambda=TRUE)
+    
+    # Update all values
+    old_theta <- new_theta
+    old_mu <- new_mu
+    old_Sigma <- new_Sigma
+    old_rho <- new_rho
+    old_z <- new_z 
+    
+    total_Lambda <- total_Lambda + new_z$Lambda
+    
+    # update z_all if z_out flag is true
+    if (z_out) {
+      z_all[m,] <- new_z
+    }
   }
   
   total_Lambda <- total_Lambda / M
@@ -78,4 +88,13 @@ gibbsSampler <- function(data, K, M=1000, theta=NULL, mu=NULL, rho=NULL, Sigma=N
   # Compute class membership posterior probabilities 
   
   # Should we return the class memberships or a function that lets us do classification based on this "training set"
+  
+  # return a list of values that depends on flags set
+  ret <- list(old_z) # just using old_z for now so that z_out works
+  
+  if (z_out) {
+    ret[[2]] <- z_all
+  }
+  
+  return(ret) # return the list
 }
