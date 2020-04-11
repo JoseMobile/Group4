@@ -1,0 +1,47 @@
+# Abstract
+
+A common problem in many analyses is determining how to group data, which observations belong to which group and how many groups are appropriate. In these problems, often the true grouping and group memberships of each observation are unknown and the data for that is simply unavailable. This is the reason why clustering methods are required to solve these sorts of problems, by creating groups using similarities between observations. An example of such a problem is trying to determine the number of sub-species of an animal in a habitat when the sub-species can not be easily distinguished visually. 
+
+One method of clustering is using Bayesian inference to estimate the posterior probability to assign the most likely group for each observation as its designated cluster. A common method of estimating probabilities is Monte Carlo methods, however there are cases where its impossible to generate the independent and identically distributed samples required for Monte Carlo. 
+
+This report's goal is to create a Markov Chain Monte Carlo (MCMC) method, specifically using a Gibbs Sampler approach, to perform clustering on data with unknown responses by estimating a posterior distribution for the class memberships. By using MCMC instead of just Monte Carlo methods, this approach is able to work in more problems and is able to estimate posterior probabilities in situations where Monte Carlo methods would not be possible. 
+
+
+
+(didn't address challenges, problems and other approaches a lot, maybe refer to these topics in more detail in the introduction)
+
+# Introduction 
+
+
+# Methodology 
+
+(??? Notation z_i ~ Multinomial(K, rho) in notes ??? Want notation to draw a cluster number from K clusters)
+
+
+The first assumption this method makes is that the observed data follows a mixture normal distribution, $x_i \sim \sum_{k=1}^K \rho_k N(\mu_k, \Sigma_k), i = 1, ..., N$ and are independent and identically distributed. Then following this, we take a Bayesian inference approach where the unknown, but true cluster memberships follows a multinomial distribution, $z_i \sim \text{Multinomial}(K, \rho)$ where $\rho = (\rho_1, ..., \rho_K)$ and $(N_1, ..., N_k) \sim \text{Multinomial}(N, \rho)$. However, a problem with this is that it quickly suffers from the curse of dimensionality as the dimension of $x_i$ increases and causes this mixture-normal model to fail. 
+
+The solution to this was to instead assume that the x's belonged to a family of models, where the distribution of each $x_i$ depended on its own parameter $\theta_i$. Then instead of assuming that the x's followed a mixture-normal, we assume that the $\theta$'s follow a mixture-normal. Where $\theta_i \in \rm{I\!R}^p$, such that p is much smaller than N and will not severely suffer from the curse of dimensionality. As in: 
+
+$$
+\theta_i \overset{iid}{\sim} \sum_{k=1}^K \rho_k N(\mu_k, \Sigma_k), i = 1, ..., N \\ 
+x_i | \theta_i \overset{ind}{\sim} f(x_i | \theta_i) 
+$$
+
+(Need to choose an f(x_i|theta_i) such that it's easy to)
+
+
+In this setup, $\theta_i$ is an unknown and random parameter and this assumed model is also known as a "random-effects" model. The standard fixed and unknown parameters that are used to define cluster sizes and membership probabilities are $\psi_k = (\rho_k, \mu_k, \Sigma_k)$. 
+
+However, the problem is still too difficult to deal with, and impossible to do analytically, and requires further simplifcation. Let $\hat{\theta}_i = \text{arg max}_{\theta} f(x_i|\theta)$, the maximum likelihood estimate of $\theta_i$ from our observed data, and $\hat{V}_i = - [\frac{\partial}{\partial \theta^2} \log(f(x_i | \hat{\theta}_i))]^{-1}$ denote the observed Fisher information. 
+
+
+(Should show closed form expression for theta_hat_i and V_i after choosing f(x_i|theta_i) family)
+
+
+Then we can approximate our above clustering model simply using the asymptotic properties of MLE which gives the following 
+
+$$
+\theta_i \overset{iid}{\sim} \sum_{k=1}^K \rho_k N(\mu_k, \Sigma_k), i = 1, ..., N \\
+\hat{\theta}_i | \theta \overset{ind}{\sim} N(\theta_i, \hat{V}_i)
+$$
+
