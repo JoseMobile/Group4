@@ -2,7 +2,7 @@ require("mniw")
 
 #' Conditional update of theta using the random effects multivariate normal
 #' 
-#' @param y A `n x p` matrix. Each row of y is an observation on p dimensions of the data
+#' @param y A `n x p` matrix. Each row of y is an observation on p dimensions of the data.
 #' @param V A `p x p x n` array of covariance matricies for each observation of y.
 #' @param mu A `K x p` matrix. The k-th row of mu is the mean of theta in class k. 
 #' @param Sigma A `p x p x K` array of covariance matricies. The k-th matrix is the covariance matrix for theta in class k.
