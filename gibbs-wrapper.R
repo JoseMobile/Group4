@@ -258,10 +258,9 @@ update_z <- function(theta, mu, Sigma, rho, give.Lambda=FALSE){
     return(Z)
   }
 }
-```
 
 
-```{r}
+
 #' Performs Gibbs Sampling given desired number of clusters and data
 #' 
 #' @param data The 'N x p' observations for which we want to cluster
