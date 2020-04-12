@@ -264,35 +264,27 @@ update_z <- function(theta, mu, Sigma, rho, give.Lambda=FALSE){
 ```{r}
 #' Performs Gibbs Sampling given desired number of clusters and data
 #' 
-#' @param data The collected data for which we want to cluster the observations
+#' @param data The 'N x p' observations for which we want to cluster
+#' @param V The 'pxp' observed Fisher information matrix 
 #' @param M A scalar value indicating the desired number of MCMC samples to be generated
 #' @param K A scalar value indicating the desired number of clusters 
 #' @param Theta.out A true or false indicating whether to save all Theta samples
 #' @param z.out a true or false indicating whether to save all z samples 
 #' @return A list of all the sampled 
-gibbsSampler <- function(data, M=1000, K, Theta.out=FALSE, z.out=FALSE){
+gibbsSampler <- function(data, V, M=1000, K, Theta.out=FALSE, z.out=FALSE){
   N <- nrow(data)
+  p <- ncol(data)
   
   # Generate Initial values 
-  
-  ################################# generate initial theta using MLE of data?
-  ### Need to create initial theta based on data
-  old_theta <- 
-    
-  old_mu <- array(rnorm(), )
+  old_theta <- data
+  old_mu <- array(rnorm(K*p), nrow=K, ncol=p)
   old_Sigma <- array(rnorm(p*p*K), dim=c(p, p, K))
   for (k in 1:K){
     sigma_0[, , k] <- t(sigma_0[, , k]) %*% sigma_0[, , k]
   }
   old_rho <- rep(1/K, times=K)
   old_z <- sample(1:K, N, replace=TRUE)
-  
-  # Compute V
-  
-  
-  
-  
-  
+
   # Allocate space to store all generated samples
   rho <- array(NA, dim=c(K, M))
   mu <- array(NA, dim=c(K, p, M))
@@ -301,11 +293,6 @@ gibbsSampler <- function(data, M=1000, K, Theta.out=FALSE, z.out=FALSE){
   z <- ifelse(z.out, array(NA, dim=c(N, M)), NULL)
   
   total_Lambda <- array(0, dim=c(N, K))
-  
-  ############## Check dimensions of mu in all functions, K x p vs p X K 
-  ### currently using K x p
-  ###### Rearrange function arguments so that all functions have similar order and arguments
-  
   
   # The dimensions of the arguments are: 
   #   theta: N x p      mu: K x p     Sigma: p x p x K    rho: K x 1    z: N x 1
