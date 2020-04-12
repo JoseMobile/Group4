@@ -12,6 +12,11 @@ This report's goal is to create a Markov Chain Monte Carlo (MCMC) method, specif
 
 # Introduction 
 
+When trying to group data where the true group memberships, if they exist, are unknown, then methods used to perform this task fall under the umbrella term, clustering, which itself is a subset of unsupervised machine learning (B. Zhang, 2003). There are already many well known methods of clustering which are widely used and effective in many contexts. These include, k-means clustering, mean-shift clustering, density-based clustering and heirarchal clustering. However, a prominent drawback for these methods is that they are heuristic and thus have no way of drawing formal inferences from their results (K. M. A. Patel and P. Thakral, 2016). 
+
+When we elect to use model-based clustering, it is possible to draw interpretations from a statistical point of view (Bouveyron, 2013). A common approach is the maximum likelihood method where one would estimate the model parameters by maximizing the log likelihood function using an Expectation Maximization (EM) Algorithm and then estimating cluster memberships using the maximum a posterioiri rule (A.Samé, 2009).
+
+As dimensionality and data size increases, the computational time needed to perform EM increases immensely. Neal and Hitton introduced a way to speed up the EM algorithm by recalculating the distribution for only one unobserved variable at each expectation step as opposed to calculating for all unobserved variables (R.M. Neal and Hinton, 1998). Bradley et al. proposed an implementaion of the EM Algorithm that was scalable to large databases with limited memory buffers (Bradley et al., 1998). While these solutions focused on improving the EM algorithm for specific cases, our paper is focused on developing an approach which does not involve any EM algorithm. We propose a solution that uses an exclusively bayesian approach by implementing a Gibb's sampler to estimate the parameters of our model as well as estimate the cluster memberships of our observations. The following sections will showcase what assumptions were made to make the simplify the problem enough to be able to use of a gibb's sampler, its performance on a real data set and lastly a discussion on the merits and flaws of our proposed solution.  
 
 # Methodology 
 
@@ -44,4 +49,5 @@ $$
 \theta_i \overset{iid}{\sim} \sum_{k=1}^K \rho_k N(\mu_k, \Sigma_k), i = 1, ..., N \\
 \hat{\theta}_i | \theta \overset{ind}{\sim} N(\theta_i, \hat{V}_i)
 $$
+
 
