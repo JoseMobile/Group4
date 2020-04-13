@@ -119,6 +119,29 @@ update_mu <- function(theta, currMu, Sigma, z) {
   return(Mu)
 }
 
+# Other update_mu may have been causing problems 
+update_mu <- function(theta, Sigma, z) {
+  # number of classes, K. number of features, p
+  K <- dim(Sigma)[3]  
+  p <- ncol(theta)  
+  
+  classMeans <- matrix(nrow=K, ncol=p)
+  counts <- numeric(length=K)
+  for (k in 1:K){
+    # Find out which observations are in class k
+    ind <- which(z == k) 
+    # Extract class counts 
+    counts[k] <- length(ind)
+    
+    # Compute variance and expected value for MVN distribution
+    Sigma[, , k] <- Sigma[, , k] / counts[k]
+    classMeans[k] <- colMeans(theta[ind, ])
+  }
+  
+  mu <- rmNorm(K, classMeans, Sigma)
+  return(mu)
+}
+
 
 
 #' Samples an array of matrices denoting the covariance matrices for each cluster
