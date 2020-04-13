@@ -416,7 +416,7 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
     }
     if(!Sigma.fixed){
     # Update Sigma, a 'p x p x K' array of covariance matricies
-      new_Sigma <- update_Sigma(old_theta, old_mu, old_z)
+      new_Sigma <- update_Sigma(data, old_theta, old_mu, old_z)
     }
     if(!rho.fixed){
     # Update rho, a K x 1 vector
