@@ -299,14 +299,17 @@ update_z <- function(theta, mu, Sigma, rho){
   # Compute the matrix of multinomial probabilties
   Lambda <- exp(Kappa)
   Lambda <- Lambda / rowSums(Lambda) 
+  Z <- numeric(length=N)
   
   # Keep re-sampling until at least one observation in each cluster
   while(TRUE){
-    # Draw from multinomial N times, each draw of size 1, using different probabilities 
-    Z <- apply(Lambda, MARGIN=1, FUN=function(lambda){ rmultinom(1, 1, lambda)} ) # K x N matrix
-    
-    # Extract class number using index from matrix of multinomial samples 
-    Z <- apply(Z, MARGIN=2, FUN=function(z){ which(z != 0) }) 
+    for (i in 1:N){
+      # Sample 1 observation from multinomial to determine class chosen
+      s <- rmultinom(1, 1, Lambda[i, ])
+      
+      # Extract class number
+      Z[i] <- which(s != 0)
+    }
     
     # Extract class counts 
     counts <- numeric(length=K)
