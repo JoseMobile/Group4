@@ -135,13 +135,17 @@ update_mu <- function(theta, Sigma, z) {
     
     # Compute variance and expected value for MVN distribution
     Sigma[, , k] <- Sigma[, , k] / counts[k]
-    classMeans[k, ] <- colMeans(theta[ind, ])
+    if (counts[k] == 1){
+      classMeans[k, ] <- theta[ind, ]
+    }
+    else{
+      classMeans[k, ] <- colMeans(theta[ind, ])  
+    }
   }
   
   mu <- rmNorm(K, classMeans, Sigma)
   return(mu)
 }
-
 
 #' Samples an array of matrices denoting the covariance matrices for each cluster
 #' 
@@ -236,14 +240,17 @@ update_rho <- function(theta, mu, Sigma, Z){
 #' @param rho An 'K x 1' vector of class membership probabilities 
 #' @param give.Lambda A T/F value indicating whether Lambda matrix of probabilities should be returned as well
 #' @return An 'n x 1' vector of updated class memberships, or if give.Lambda=TRUE, returns a list that contains the 'n x 1' updated class memberships and the computed 'n x k' Lambda matrix.
-update_z <- function(theta, mu, Sigma, rho, give.Lambda=FALSE){
+update_z <- function(theta, mu, Sigma, rho){
   # Initialize constants and pre-allocate memory
   K <- length(rho) 
   N <- nrow(theta)
   Kappa <- matrix(NA, nrow=N, ncol=K) 
   
-  # Compute inverses and log-determinants for each covariance matrix
-  inv_sigma <- apply(Sigma, MARGIN=3, FUN=function(z){ solveV(z, ldV=TRUE) })
+  # Compute inverses and log-determinants for each covariance matrix 
+  inv_sigma <- vector("list", length=K)
+  for (k in 1:K){
+    inv_sigma[[k]] <- solveV(Sigma[, , k], ldV=TRUE)
+  }
   log_det <- sapply(inv_sigma, FUN=function(z){ z$ldV }) 
   log_rho <- log(rho)
   
@@ -262,23 +269,22 @@ update_z <- function(theta, mu, Sigma, rho, give.Lambda=FALSE){
   # Keep re-sampling until at least one observation in each cluster
   while(TRUE){
     # Draw from multinomial N times, each draw of size 1, using different probabilities 
-    Z <- apply(Lambda, MARGIN=1, FUN=function(lambda){ rmultinom(1, 1, lambda)} ) # N x K matrix
+    Z <- apply(Lambda, MARGIN=1, FUN=function(lambda){ rmultinom(1, 1, lambda)} ) # K x N matrix
+    
     # Extract class number using index from matrix of multinomial samples 
-    Z <- apply(Z, MARGIN=1, FUN=function(z){ which(z != 0) }) 
+    Z <- apply(Z, MARGIN=2, FUN=function(z){ which(z != 0) }) 
     
     # Extract class counts 
-    counts <- table(Z) 
+    counts <- numeric(length=K)
+    for (k in 1:K){
+      counts[k] <- sum(Z == k)
+    }
     if (!(any(counts == 0))){
       break
     }
   }
   
-  if (give.Lambda){
-    return(list(z=Z, Lambda=Lambda))
-  }
-  else{
-    return(Z)
-  }
+  return(list(z=Z, Lambda=Lambda))
 }
 
 
@@ -360,6 +366,8 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
   
   # The dimensions of the arguments are: 
   #   theta: N x p      mu: K x p     Sigma: p x p x K    rho: K x 1    z: N x 1
+  # Parameters orders should all be: theta, mu, Sigma, rho, z
+  #   If not check the function calls and standardize them
   for (m in 1:(burnin_period +numIter)){
     # Call the update functions
     #  Check the dimensions of the return values match the other functions 
@@ -370,7 +378,7 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
     }
     if (!mu.fixed){
     # Update mu, a 'K x p' matrix of class averages of theta
-      new_mu <- update_mu(old_theta, old_mu, old_Sigma, old_z)
+      new_mu <- update_mu(old_theta, old_Sigma, old_z)
     }
     if(!Sigma.fixed){
     # Update Sigma, a 'p x p x K' array of covariance matricies
@@ -378,11 +386,11 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
     }
     if(!rho.fixed){
     # Update rho, a K x 1 vector
-      new_rho <- update_rho(old_theta, old_z, old_mu, old_Sigma)
+      new_rho <- update_rho(old_theta, old_mu, old_Sigma, old_z)
     }
     if (!z.fixed){
     # Update z, an N x 1 vector
-      new_z <- update_z(old_theta, old_mu, old_rho, old_Sigma, give.Lambda=TRUE)
+      new_z <- update_z(old_theta, old_mu, old_Sigma, old_rho)
     }
     
     # Store theta and z values if desired
@@ -406,7 +414,7 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
     old_mu <- new_mu
     old_Sigma <- new_Sigma
     old_rho <- new_rho
-    old_z <- new_z
+    old_z <- new_z$z
   }
   
   total_Lambda <- total_Lambda / numIter
