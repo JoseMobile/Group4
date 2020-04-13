@@ -46,17 +46,44 @@ update_theta <- function(y, V, mu, Sigma, z) {
   # allocate space for new mu and Sigma
   new_mu <- matrix(nrow = n, ncol = p)
   new_Sigma <- array(dim = c(p,p,n))
+  count <- numeric(length = K)
   
   for (k in 1:K) {
     # iterate through classes and fill in new mu and Sigma with
     # rows of mu and Sigma based on observations from z
     
     ind <- which(z == k) # indices for z that are equal to k
-    count <- length(ind) # number of observations of class k
+    count[k] <- length(ind) # number of observations of class k
     # fill in all of new_mu with class mean k with index in ind
-    new_mu[ind,] <- matrix(mu[k,], nrow = count, ncol = p, byrow = TRUE)
+    new_mu[ind,] <- matrix(mu[k,], nrow = count[k], ncol = p, byrow = TRUE)
     # fill in indicies of ind of new_Sigma with covariance matricies for k
     new_Sigma[,,ind] <- Sigma[,,k]
+  }
+  
+  # Checking the dimensions of y and new_Sigma
+  dim_nSig <- dim(new_Sigma) # dimensions of new sigma
+  dim_y <- dim(y)            # dimensions of y
+  
+  # if statement for if anything in the function looks weird
+  if (dim_y[1] != dim_nSig[3] || # n in y is not the same as n in Sigma
+      dim_y[2] != dim_nSig[1] || # p in y is not the same as p in Sigma
+      dim_y[2] != dim_nSig[2] || # p in y is not the same as the other p in Sigma
+      anyNA(new_Sigma)) 
+  { 
+    cat("dimensions of y :        ", dim_y, "\n")
+    cat("dimensions of new_Sigma :", dim_nSig, "\n")
+    
+    cat("any NAs in y :", anyNA(y), "\n")
+    cat("any NAs in new Sigma :", anyNA(new_Sigma), "\n")
+    cat("count of classes :", count, "\n")
+    cat("any NAs in new mu :", anyNA(new_mu), "\n")
+    
+    cat("any NULLs in y :", is.null(y), "\n")
+    cat("any NULLs in new Sigma :", is.null(new_Sigma), "\n")
+    cat("any NULLs in new mu :", is.null(new_mu), "\n")
+    
+    print(Sigma)
+    print("the above is theSigma array")
   }
   
   # sample using efficient random effects sampler with new mu and Sigma
@@ -149,9 +176,11 @@ update_mu <- function(theta, Sigma, z) {
 
 #' Samples an array of matrices denoting the covariance matrices for each cluster
 #' 
+#' @param y A `n x p` matrix. Each row of y is an observation on p dimensions of the data.
 #' @param theta A `n x p` matrix where each row is an observation and the columns are a subset of a larger parameter set.
 #' @param mu An `K x p` vector denoting the prior cluster means.
 #' @param z A length `n` vector denoting the class that each row of theta belongs to.
+#' @param old_Sigma The current observation of the Sigma. A `p x p x K` array of covariance matrices.
 #' @return A `p x p x K` array of matrices sampled from the inverse-wishart distribution where the kth matrix
 #' denotes the posterior covariance matrix of the kth cluster.
 #' @details The array of matrices that is returned is  `Sigma_k | A \ \{theta_k\}` which had been sampled from
@@ -160,7 +189,7 @@ update_mu <- function(theta, Sigma, z) {
 #' , p is a vector of the sizes of theta and 1 is a vector of 1's. Assume that the dimension requirements
 #' are met
 #' ```
-update_Sigma <- function(theta, mu, z) {
+update_Sigma <- function(y, theta, mu, z) {
   # iterate through classes and make a new mu to match theta
   dim_mu <- dim(mu) # dimensions of mu c(K, p)
   K <- dim_mu[1] # rows are K
@@ -169,6 +198,7 @@ update_Sigma <- function(theta, mu, z) {
   
   expand_mu <- matrix(nrow = n, ncol = p) # allocate space for expanded mu
   count <- rep(NA, K) # allocate space for count of classes in z
+  Omega <- array(dim = c(p,p,K)) # allocate space for omega
   for (k in 1:K) {
     ind <- which(z == k) # indices of observations of class k
     # calculate count, number of class observations in z
@@ -176,6 +206,9 @@ update_Sigma <- function(theta, mu, z) {
     
     # fill in expand_mu with each class mean from mu
     expand_mu[ind,] <- matrix(mu[k,], nrow = count[k], ncol = p, byrow = TRUE)
+    
+    # fill omega array with variances of y
+    Omega[,,k] <- var(y) # variance matrix of y
   }
   # now the rows of theta and mu match so that the i-th row of mu is the mean
   # for the i-th row of theta
@@ -188,16 +221,17 @@ update_Sigma <- function(theta, mu, z) {
   # calculate Psi by outer product of each row of res an entry to the array
   for (k in 1:K) {
     k_inds <- which(z == k) # indicies of observations of class k
-    Psi[,,k] <- matrix(0,p,p) # initiate Psi_k to zeros
+    Psi[,,k] <- Omega[,,k] # initiate Psi_k to Omega_k
     for (ii in 1:count[k]) { # iterate through all of the class observations
       ind <- k_inds[ii] # ii-th index of class k
-      Psi[,,k] <- Psi[,,k] + res[ind,] %*% t(res[ind,]) # outer product
+      Psi[,,k] <- Psi[,,k] + tcrossprod(res[ind,]) # outer product
+      # tcrossprod(x) is x %*% t(x)
     }
     # Psi_k is now the sum of outer products of the rows of res
   }
   
   # calculate nu
-  nu <- count - p - 1 # a vector of length K
+  nu <- count + p + 2 # a vector of length K
   
   Sigma <- riwish(K, Psi, nu)
   
