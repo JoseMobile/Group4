@@ -316,6 +316,7 @@ update_z <- function(theta, mu, Sigma, rho){
     for (k in 1:K){
       counts[k] <- sum(Z == k)
     }
+    print(counts)
     if (!(any(counts == 0))){
       break
     }
@@ -363,17 +364,49 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
   }
   
   #Getting the Initial Value of Model Parameters 
-  if (missing(initParamVals)){
-    old_theta <- data
-    old_mu <- matrix(rnorm(K*p), nrow=K, ncol=p)
-    old_Sigma <- array(runif(p*p*K)*2-1, dim=c(p, p, K))
+  if (missing(initParamVals)){ # no initial values given
+    # INITALIZING PARAMETERS
     
-    for (k in 1:K){
-      old_Sigma[, , k] <- t(old_Sigma[, , k]) %*% old_Sigma[, , k]
-    }
-    old_rho <- rep(1/K, K)
-    old_z <- sample(1:K, N, replace=TRUE)
-  } else {
+    # Compute overall data means and variances
+    data_mu <- colMeans(data)
+    data_var <- var(data) * (N-1)/(N-p) # variance of data
+    
+    # initalizing parameters using kmeans++ algorithm
+    old_z <- init_z(data, K) # use kmeans++ algorith to initialize z
+    
+    # set rho to proportion of each observation
+    count <- as.numeric(table(old_z))
+    old_rho <- count/N 
+    # table gives count of each observation of class
+    # then dividing by N gives the proportion
+    
+    # set theta to observed data
+    old_theta <- data
+    
+    # allocate space for mu and Sigma
+    old_mu <- matrix(nrow = K, ncol = p)
+    old_Sigma <- array(dim = c(p,p,K))
+    # set mu to sample mean of data in that class
+    for (k in 1:K) {
+      ind <- which(old_z == k) # indices of data in class k
+      if (count[k] > p) { # enough data to sample both mu and Sigma
+        old_mu[k,] <- colMeans(data[ind,]) # sample mu
+        # sample Sigma, var() scaled by n-1, so rescale to n-p
+        old_Sigma[,,k] <- var(data) * (count[k]-1)/(count[k]-p)
+      } else {
+        # not enough data for Sigma, so use data variance
+        old_Sigma[,,k] <- data_var
+        # sampling for mu
+        if (count[k] > 1) { # enough data for sampling mu
+          old_mu[k,] <- colMeans(data[ind,])
+        } else if (count[k] == 1) { # only one so set to mu
+          old_mu[k,] <- data[ind,]
+        } else { # count is zero, so use data mean
+          old_mu[k,] <- data_mu
+        } # end second if
+      } # end first if
+    } # end for
+  } else { # given inital parameters
     if ( (! "theta" %in% names(initParamVals) ) || (!"mu" %in% names(initParamVals)) ||  (!"Sigma" %in% names(initParamVals))
          ||  (!"rho" %in% names(initParamVals))||  (!"z" %in% names(initParamVals)))
       stop("initParamVals needs theta, mu, Sigma, rho and z params!")
