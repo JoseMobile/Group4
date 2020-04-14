@@ -1,6 +1,7 @@
 source('nnm-functions.R')
 
 
+
 #' Conditional update of theta using the random effects multivariate normal
 #' 
 #' 
@@ -15,6 +16,7 @@ source('nnm-functions.R')
 #' theta ~ N(mu, Sigma)
 #' y | theta ~ N(theta, V)
 #' 
+
 update_theta <- function(y, V, mu, Sigma, z) {
   # dimension variables
   K <- nrow(mu) # classes
@@ -28,6 +30,7 @@ update_theta <- function(y, V, mu, Sigma, z) {
   new_mu <- matrix(nrow = n, ncol = p)
   new_Sigma <- array(dim = c(p,p,n))
   count <- numeric(length = K)
+
   
   for (k in 1:K) {
     # iterate through classes and fill in new mu and Sigma with
@@ -188,12 +191,10 @@ update_Sigma <- function(y, theta, mu, z, Omega, vK) {
   
   # calculate nu
   nu <- count + vK # a vector of length K
-  
   Sigma <- riwish(K, Psi, nu)
   
   return(Sigma)
 }
-
 
 #' Samples cluster memberships probabilities from a Dirichlet distribution 
 #' 
@@ -216,7 +217,6 @@ update_rho <- function(theta, mu, Sigma, Z){
     alpha[k] <- sum(Z == k) + 1
   }
   
-  # Generate tau's 
   rho<-rdirichlet(1, alpha)
   return(rho)
 }
@@ -270,6 +270,7 @@ update_z <- function(theta, mu, Sigma, rho){
 }
 
 ###########################################################################################3
+
 
 
 #' Performs Gibbs Sampling given desired number of clusters and data
