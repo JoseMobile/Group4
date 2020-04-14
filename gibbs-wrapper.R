@@ -46,17 +46,44 @@ update_theta <- function(y, V, mu, Sigma, z) {
   # allocate space for new mu and Sigma
   new_mu <- matrix(nrow = n, ncol = p)
   new_Sigma <- array(dim = c(p,p,n))
+  count <- numeric(length = K)
   
   for (k in 1:K) {
     # iterate through classes and fill in new mu and Sigma with
     # rows of mu and Sigma based on observations from z
     
     ind <- which(z == k) # indices for z that are equal to k
-    count <- length(ind) # number of observations of class k
+    count[k] <- length(ind) # number of observations of class k
     # fill in all of new_mu with class mean k with index in ind
-    new_mu[ind,] <- matrix(mu[k,], nrow = count, ncol = p, byrow = TRUE)
+    new_mu[ind,] <- matrix(mu[k,], nrow = count[k], ncol = p, byrow = TRUE)
     # fill in indicies of ind of new_Sigma with covariance matricies for k
     new_Sigma[,,ind] <- Sigma[,,k]
+  }
+  
+  # Checking the dimensions of y and new_Sigma
+  dim_nSig <- dim(new_Sigma) # dimensions of new sigma
+  dim_y <- dim(y)            # dimensions of y
+  
+  # if statement for if anything in the function looks weird
+  if (dim_y[1] != dim_nSig[3] || # n in y is not the same as n in Sigma
+      dim_y[2] != dim_nSig[1] || # p in y is not the same as p in Sigma
+      dim_y[2] != dim_nSig[2] || # p in y is not the same as the other p in Sigma
+      anyNA(new_Sigma)) 
+  { 
+    cat("dimensions of y :        ", dim_y, "\n")
+    cat("dimensions of new_Sigma :", dim_nSig, "\n")
+    
+    cat("any NAs in y :", anyNA(y), "\n")
+    cat("any NAs in new Sigma :", anyNA(new_Sigma), "\n")
+    cat("count of classes :", count, "\n")
+    cat("any NAs in new mu :", anyNA(new_mu), "\n")
+    
+    cat("any NULLs in y :", is.null(y), "\n")
+    cat("any NULLs in new Sigma :", is.null(new_Sigma), "\n")
+    cat("any NULLs in new mu :", is.null(new_mu), "\n")
+    
+    print(Sigma)
+    print("the above is theSigma array")
   }
   
   # sample using efficient random effects sampler with new mu and Sigma
@@ -119,13 +146,41 @@ update_mu <- function(theta, currMu, Sigma, z) {
   return(Mu)
 }
 
-
+# Other update_mu may have been causing problems 
+update_mu <- function(theta, Sigma, z) {
+  # number of classes, K. number of features, p
+  K <- dim(Sigma)[3]  
+  p <- ncol(theta)  
+  
+  classMeans <- matrix(nrow=K, ncol=p)
+  counts <- numeric(length=K)
+  for (k in 1:K){
+    # Find out which observations are in class k
+    ind <- which(z == k) 
+    # Extract class counts 
+    counts[k] <- length(ind)
+    
+    # Compute variance and expected value for MVN distribution
+    Sigma[, , k] <- Sigma[, , k] / counts[k]
+    if (counts[k] == 1){
+      classMeans[k, ] <- theta[ind, ]
+    }
+    else{
+      classMeans[k, ] <- colMeans(theta[ind, ])  
+    }
+  }
+  
+  mu <- rmNorm(K, classMeans, Sigma)
+  return(mu)
+}
 
 #' Samples an array of matrices denoting the covariance matrices for each cluster
 #' 
+#' @param y A `n x p` matrix. Each row of y is an observation on p dimensions of the data.
 #' @param theta A `n x p` matrix where each row is an observation and the columns are a subset of a larger parameter set.
 #' @param mu An `K x p` vector denoting the prior cluster means.
 #' @param z A length `n` vector denoting the class that each row of theta belongs to.
+#' @param old_Sigma The current observation of the Sigma. A `p x p x K` array of covariance matrices.
 #' @return A `p x p x K` array of matrices sampled from the inverse-wishart distribution where the kth matrix
 #' denotes the posterior covariance matrix of the kth cluster.
 #' @details The array of matrices that is returned is  `Sigma_k | A \ \{theta_k\}` which had been sampled from
@@ -134,7 +189,7 @@ update_mu <- function(theta, currMu, Sigma, z) {
 #' , p is a vector of the sizes of theta and 1 is a vector of 1's. Assume that the dimension requirements
 #' are met
 #' ```
-update_Sigma <- function(theta, mu, z) {
+update_Sigma <- function(y, theta, mu, z) {
   # iterate through classes and make a new mu to match theta
   dim_mu <- dim(mu) # dimensions of mu c(K, p)
   K <- dim_mu[1] # rows are K
@@ -143,6 +198,7 @@ update_Sigma <- function(theta, mu, z) {
   
   expand_mu <- matrix(nrow = n, ncol = p) # allocate space for expanded mu
   count <- rep(NA, K) # allocate space for count of classes in z
+  Omega <- array(dim = c(p,p,K)) # allocate space for omega
   for (k in 1:K) {
     ind <- which(z == k) # indices of observations of class k
     # calculate count, number of class observations in z
@@ -150,6 +206,9 @@ update_Sigma <- function(theta, mu, z) {
     
     # fill in expand_mu with each class mean from mu
     expand_mu[ind,] <- matrix(mu[k,], nrow = count[k], ncol = p, byrow = TRUE)
+    
+    # fill omega array with variances of y
+    Omega[,,k] <- var(y) # variance matrix of y
   }
   # now the rows of theta and mu match so that the i-th row of mu is the mean
   # for the i-th row of theta
@@ -162,16 +221,17 @@ update_Sigma <- function(theta, mu, z) {
   # calculate Psi by outer product of each row of res an entry to the array
   for (k in 1:K) {
     k_inds <- which(z == k) # indicies of observations of class k
-    Psi[,,k] <- matrix(0,p,p) # initiate Psi_k to zeros
+    Psi[,,k] <- Omega[,,k] # initiate Psi_k to Omega_k
     for (ii in 1:count[k]) { # iterate through all of the class observations
       ind <- k_inds[ii] # ii-th index of class k
-      Psi[,,k] <- Psi[,,k] + res[ind,] %*% t(res[ind,]) # outer product
+      Psi[,,k] <- Psi[,,k] + tcrossprod(res[ind,]) # outer product
+      # tcrossprod(x) is x %*% t(x)
     }
     # Psi_k is now the sum of outer products of the rows of res
   }
   
   # calculate nu
-  nu <- count - p - 1 # a vector of length K
+  nu <- count + p + 2 # a vector of length K
   
   Sigma <- riwish(K, Psi, nu)
   
@@ -212,14 +272,17 @@ update_rho <- function(theta, mu, Sigma, Z){
 #' @param rho An 'K x 1' vector of class membership probabilities 
 #' @param give.Lambda A T/F value indicating whether Lambda matrix of probabilities should be returned as well
 #' @return An 'n x 1' vector of updated class memberships, or if give.Lambda=TRUE, returns a list that contains the 'n x 1' updated class memberships and the computed 'n x k' Lambda matrix.
-update_z <- function(theta, mu, Sigma, rho, give.Lambda=FALSE){
+update_z <- function(theta, mu, Sigma, rho){
   # Initialize constants and pre-allocate memory
   K <- length(rho) 
   N <- nrow(theta)
   Kappa <- matrix(NA, nrow=N, ncol=K) 
   
-  # Compute inverses and log-determinants for each covariance matrix
-  inv_sigma <- apply(Sigma, MARGIN=3, FUN=function(z){ solveV(z, ldV=TRUE) })
+  # Compute inverses and log-determinants for each covariance matrix 
+  inv_sigma <- vector("list", length=K)
+  for (k in 1:K){
+    inv_sigma[[k]] <- solveV(Sigma[, , k], ldV=TRUE)
+  }
   log_det <- sapply(inv_sigma, FUN=function(z){ z$ldV }) 
   log_rho <- log(rho)
   
@@ -234,27 +297,30 @@ update_z <- function(theta, mu, Sigma, rho, give.Lambda=FALSE){
   # Compute the matrix of multinomial probabilties
   Lambda <- exp(Kappa)
   Lambda <- Lambda / rowSums(Lambda) 
+  Z <- numeric(length=N)
   
   # Keep re-sampling until at least one observation in each cluster
   while(TRUE){
-    # Draw from multinomial N times, each draw of size 1, using different probabilities 
-    Z <- apply(Lambda, MARGIN=1, FUN=function(lambda){ rmultinom(1, 1, lambda)} ) # N x K matrix
-    # Extract class number using index from matrix of multinomial samples 
-    Z <- apply(Z, MARGIN=1, FUN=function(z){ which(z != 0) }) 
+    for (i in 1:N){
+      # Sample 1 observation from multinomial to determine class chosen
+      s <- rmultinom(1, 1, Lambda[i, ])
+      
+      # Extract class number
+      Z[i] <- which(s != 0)
+    }
     
     # Extract class counts 
-    counts <- table(Z) 
+    counts <- numeric(length=K)
+    for (k in 1:K){
+      counts[k] <- sum(Z == k)
+    }
+    print(counts)
     if (!(any(counts == 0))){
       break
     }
   }
   
-  if (give.Lambda){
-    return(list(z=Z, Lambda=Lambda))
-  }
-  else{
-    return(Z)
-  }
+  return(list(z=Z, Lambda=Lambda))
 }
 
 
@@ -296,17 +362,49 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
   }
   
   #Getting the Initial Value of Model Parameters 
-  if (missing(initParamVals)){
-    old_theta <- data
-    old_mu <- matrix(rnorm(K*p), nrow=K, ncol=p)
-    old_Sigma <- array(runif(p*p*K)*2-1, dim=c(p, p, K))
+  if (missing(initParamVals)){ # no initial values given
+    # INITALIZING PARAMETERS
     
-    for (k in 1:K){
-      old_Sigma[, , k] <- t(old_Sigma[, , k]) %*% old_Sigma[, , k]
-    }
-    old_rho <- rep(1/K, K)
-    old_z <- sample(1:K, N, replace=TRUE)
-  } else {
+    # Compute overall data means and variances
+    data_mu <- colMeans(data)
+    data_var <- var(data) * (N-1)/(N-p) # variance of data
+    
+    # initalizing parameters using kmeans++ algorithm
+    old_z <- init_z(data, K) # use kmeans++ algorith to initialize z
+    
+    # set rho to proportion of each observation
+    count <- as.numeric(table(old_z))
+    old_rho <- count/N 
+    # table gives count of each observation of class
+    # then dividing by N gives the proportion
+    
+    # set theta to observed data
+    old_theta <- data
+    
+    # allocate space for mu and Sigma
+    old_mu <- matrix(nrow = K, ncol = p)
+    old_Sigma <- array(dim = c(p,p,K))
+    # set mu to sample mean of data in that class
+    for (k in 1:K) {
+      ind <- which(old_z == k) # indices of data in class k
+      if (count[k] > p) { # enough data to sample both mu and Sigma
+        old_mu[k,] <- colMeans(data[ind,]) # sample mu
+        # sample Sigma, var() scaled by n-1, so rescale to n-p
+        old_Sigma[,,k] <- var(data) * (count[k]-1)/(count[k]-p)
+      } else {
+        # not enough data for Sigma, so use data variance
+        old_Sigma[,,k] <- data_var
+        # sampling for mu
+        if (count[k] > 1) { # enough data for sampling mu
+          old_mu[k,] <- colMeans(data[ind,])
+        } else if (count[k] == 1) { # only one so set to mu
+          old_mu[k,] <- data[ind,]
+        } else { # count is zero, so use data mean
+          old_mu[k,] <- data_mu
+        } # end second if
+      } # end first if
+    } # end for
+  } else { # given inital parameters
     if ( (! "theta" %in% names(initParamVals) ) || (!"mu" %in% names(initParamVals)) ||  (!"Sigma" %in% names(initParamVals))
          ||  (!"rho" %in% names(initParamVals))||  (!"z" %in% names(initParamVals)))
       stop("initParamVals needs theta, mu, Sigma, rho and z params!")
@@ -336,6 +434,8 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
   
   # The dimensions of the arguments are: 
   #   theta: N x p      mu: K x p     Sigma: p x p x K    rho: K x 1    z: N x 1
+  # Parameters orders should all be: theta, mu, Sigma, rho, z
+  #   If not check the function calls and standardize them
   for (m in 1:(burnin_period +numIter)){
     # Call the update functions
     #  Check the dimensions of the return values match the other functions 
@@ -346,19 +446,19 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
     }
     if (!mu.fixed){
     # Update mu, a 'K x p' matrix of class averages of theta
-      new_mu <- update_mu(old_theta, old_mu, old_Sigma, old_z)
+      new_mu <- update_mu(old_theta, old_Sigma, old_z)
     }
     if(!Sigma.fixed){
     # Update Sigma, a 'p x p x K' array of covariance matricies
-      new_Sigma <- update_Sigma(old_theta, old_mu, old_z)
+      new_Sigma <- update_Sigma(data, old_theta, old_mu, old_z)
     }
     if(!rho.fixed){
     # Update rho, a K x 1 vector
-      new_rho <- update_rho(old_theta, old_z, old_mu, old_Sigma)
+      new_rho <- update_rho(old_theta, old_mu, old_Sigma, old_z)
     }
     if (!z.fixed){
     # Update z, an N x 1 vector
-      new_z <- update_z(old_theta, old_mu, old_rho, old_Sigma, give.Lambda=TRUE)
+      new_z <- update_z(old_theta, old_mu, old_Sigma, old_rho)
     }
     
     # Store theta and z values if desired
@@ -382,7 +482,7 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
     old_mu <- new_mu
     old_Sigma <- new_Sigma
     old_rho <- new_rho
-    old_z <- new_z
+    old_z <- new_z$z
   }
   
   total_Lambda <- total_Lambda / numIter
