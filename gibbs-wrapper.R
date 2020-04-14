@@ -204,8 +204,6 @@ update_rho <- function(theta, mu, Sigma, Z){
   return(rho)
 }
 
-
-
 #' Samples group memberships from a multinomial distribution conditioned on the other parameters 
 #' 
 #' @param theta An 'n x p' matrix, where row i is the parameters of observation i.

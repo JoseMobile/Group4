@@ -9,7 +9,7 @@ require(numbers)
 #' @param rho A length-`K` probability vector of group membership.
 #' @param y An `N x p` matrix of observations, each of which is a column.
 #' @param V A `p x p x N` matrix of variances corresponding to each observation.
-#' @param theta A `p x N` matrix of observation means.
+#' @param theta A `N x p` matrix of observation means.
 #' @param z A length-`N` vector of integers between 1 and `K` indicating the group membership of each column of `theta`.
 #' @param log bool value indicating whether to give log value of distribution 
 #' 
@@ -27,11 +27,11 @@ nnm_loglik <- function(mu, Sigma, rho, y, V, theta, z, log=TRUE) {
         ll <- ll + Nk * log(rho[kk])
         # mean contribution
         # here we repeat mu[kk,] and Sigma[,,kk] Nk times to correspond to the total number of group membership count  
-        ll <- ll + sum(dmNorm(t(theta[,idk]), mu = matrix(rep(mu[kk,], Nk), nrow=Nk, ncol=p, byrow=TRUE), Sigma = array(rep(Sigma[,,kk], Nk), dim=c(p,p,Nk)),  log = TRUE ))
+        ll <- ll + sum(dmNorm(theta[idk,], mu = matrix(rep(mu[kk,], Nk), nrow=Nk, ncol=p, byrow=TRUE), Sigma = array(rep(Sigma[,,kk], Nk), dim=c(p,p,Nk)),  log = TRUE ))
     }
   }
   # observation contribution
-  ll<- ll + sum(dmNorm(y, mu = t(theta), Sigma = V, log = TRUE))
+  ll<- ll + sum(dmNorm(y, mu =theta, Sigma = V, log = TRUE))
   
   if (!log) # check if non log value desired  
     ll<- exp(ll)
@@ -48,7 +48,7 @@ nnm_loglik <- function(mu, Sigma, rho, y, V, theta, z, log=TRUE) {
 #' @param rho A length-`K` probability vector of group membership.
 #' @param y An `N x p` matrix of observations, each of which is a column.
 #' @param V A `p x p x N` matrix of variances corresponding to each observation.
-#' @param theta A `p x N` matrix of observation means.
+#' @param theta A `N x p` matrix of observation means.
 #' @param z A length-`N` vector of integers between 1 and `K` indicating the group membership of each column of `theta`.
 #' @param vk A length- `K` vector of integers acting as virtual counts from prior 
 #' @param Omega A `p x p x K` matrix of variances corresponding to the variance of the prior chosen.
@@ -73,7 +73,7 @@ nnm_post <- function(mu, Sigma, rho, y, V, theta, z, vk, Omega, log=TRUE) {
 #' Normalized Conditional Log-PDF of Mu 
 #' 
 #' 
-#' @param theta A `p x N` matrix of observation means.
+#' @param theta A `N x p` matrix of observation means.
 #' @param mu A `K x p` matrix of group means, where `K` is the number of mixture components and `p` is the dimension of each observation.
 #' @param Sigma A `p x p x K` matrix of group variances.
 #' @param z A length-`N` vector of integers between 1 and `K` indicating the group membership of each column of `theta`.
@@ -91,11 +91,11 @@ mu_k.post<-function(theta, mu, Sigma, z, k, log=TRUE){
   Nk<- sum(tidx)
   
   #if Nk == 1 then no need for rowMeans
-  theta_avg_k<- theta[,tidx]  
+  theta_avg_k<- theta[tidx,]  
   
   #Nk > 1, avg group members values across each dimension
   if (Nk > 1){
-    theta_avg_k<-rowMeans(theta[,tidx])
+    theta_avg_k<-colMeans(theta[tidx,])
   }
   
   #ensure vector data structure is used  
@@ -114,7 +114,7 @@ mu_k.post<-function(theta, mu, Sigma, z, k, log=TRUE){
 #' Extract Mean and Variance Marginals of parameter Mu_k assuming stationary theta and Sigma, and z
 #' 
 #' 
-#' @param theta A `p x N` matrix of observation means.
+#' @param theta A `N x p` matrix of observation means.
 #' @param marginal_idx a scalar value specifying which demension of mu to condition on 
 #' @param Sigma A `p x p x K` matrix of group variances.
 #' @param z A length-`N` vector of integers between 1 and `K` indicating the group membership of each column of `theta`.
@@ -130,11 +130,11 @@ mu_k_marginals.param<-function(theta, marginal_idx, Sigma, z, k){
   Nk<- sum(tidx)
   
   #if Nk == 1 then theta_avg is equal to only member 
-  theta_avg_k<- theta[,tidx]  
+  theta_avg_k<- theta[tidx,]  
   
   #Nk > 1, avg group members values across each dimension
   if (Nk > 1){
-    theta_avg_k<-rowMeans(theta[,tidx])
+    theta_avg_k<-colMeans(theta[tidx,])
   }
   
   Sigma_k <- Sigma_k/Nk
@@ -150,7 +150,7 @@ mu_k_marginals.param<-function(theta, marginal_idx, Sigma, z, k){
 #' 
 #' 
 #' @param y An `N x p` vector of observations, each of which is a column.
-#' @param theta A `p x N` vector of observation means.
+#' @param theta A `N x p` vector of observation means.
 #' @param V A `p x p x N` matrix of variances corresponding to each observation.
 #' @param mu A `K x p` matrix of group means, where `K` is the number of mixture components and `p` is the dimension of each observation.
 #' @param Sigma A `p x p x K` matrix of group variances.
@@ -163,7 +163,7 @@ theta_i.post<-function(y, theta, V, mu, Sigma, Z, rand_idx, log=TRUE){
   
   #Extract params relevant to the theta conditoning on 
   y_i <- y[rand_idx,]
-  theta_i<- theta[,rand_idx]
+  theta_i<- theta[rand_idx,]
   V_i<- V[,, rand_idx]
   z_i <- Z[rand_idx]
   
@@ -192,7 +192,7 @@ theta_i.post<-function(y, theta, V, mu, Sigma, Z, rand_idx, log=TRUE){
 #' Normalized Conditional Log-PDF of Sigma_k
 #' 
 #'
-#' @param theta A `p x N` matrix of observation means.
+#' @param theta A `N x p` matrix of observation means.
 #' @param mu A `K x p` matrix of group means, where `K` is the number of mixture components and `p` is the dimension of each observation.
 #' @param Sigma A `p x p x K` matrix of group variances.
 #' @param Z A length- `N` vector of integers between 1 and `K`
@@ -216,6 +216,7 @@ sigma_k.post<-function(theta, mu, Sigma, Z, k, vk, Omega, log=TRUE){
   tidx<- (Z == k)
   Nk<- sum(tidx)
   
+  theta<-t(theta)
   theta_less_mu <- theta[,tidx] - mu_k
   
   #get log pdf of an inverse-wishart distribution
@@ -267,7 +268,7 @@ rho.post<-function(Z, rho, log=TRUE){
 #' 
 #' @param Z A length- `N` vectir of integers between 1 and `K`
 #' @param rho A length-`K` probability vector of group membership.
-#' @param theta A `p x N` vector of observation means.
+#' @param theta A `N x p` vector of observation means.
 #' @param mu A `K x p` matrix of group means, where `K` is the number of mixture components and `p` is the dimension of each observation.
 #' @param Sigma A `p x p x K` matrix of group variances.
 #' @param rand_idx A scalar value bewteen `1` and `N` to indicate which z to condtion on. 
@@ -281,7 +282,7 @@ z.post<-function(Z, rho, theta, mu, Sigma, rand_idx, log=TRUE){
   
   #get group membership theta_i 
   z_i <- Z[rand_idx]
-  theta_i <- theta[, rand_idx]
+  theta_i <- theta[rand_idx,]
   
   #add rho contribution 
   ll<- ll + log(rho[z_i])
@@ -446,13 +447,13 @@ sim_data<-function(K, N, p){
   
   
   #Initialize theta values to all 0
-  theta<- matrix( runif(0, p*N), nrow =p, ncol=N)
+  theta<- matrix( runif(0, p*N), nrow =N, ncol=p)
   
   #Simulate theta values for all N data points by conisdering 
   #their group membership and sampling using the mean and Sigma of that group
   for(i in 1:N){
     z_i <- Z[i]
-    theta[,i] <- rmNorm(n=1, mu[z_i,], Sigma[,,z_i])
+    theta[i,] <- rmNorm(n=1, mu[z_i,], Sigma[,,z_i])
   }
   
   #Initialize y values (data) to all 0
@@ -461,7 +462,7 @@ sim_data<-function(K, N, p){
   #Simulate values for all N data points by sampling using their 
   #their corresponding theta and V values. 
   for(i in 1:N){
-    y[i,]<- rmNorm(n=1, theta[,i], V[,,i])
+    y[i,]<- rmNorm(n=1, theta[i,], V[,,i])
   }
   
   #Simulate Omega by using the Variance of the simulated data, y 
@@ -480,9 +481,47 @@ sim_data<-function(K, N, p){
 }
 
 
+#' Initial cluster allocation.
+#'
+#' Initializes the clusters using the kmeans++ algorithm of Arthur & Vassilvitskii (2007).
+#'
+#' @param y An `N x p` matrix of observations, each of which is a column.
+#' @param K Number of clusters (positive integer).
+#' @param max_iter The maximum number of steps in the [stats::kmeans()] algorithm.
+#' @param nstart The number of random starts in the [stats::kmeans()] algorithm.
+#'
+#' @return A vector of length `N` consisting of integers between `1` and `K` specifying an initial clustering of the observations.
+#'
+#' @references Arthur, D., Vassilvitskii, S. "k-means++: the advantages of careful seeding" *Proceedings of the 18th Annual ACM-SIAM Symposium on Discrete Algorithms.* (2007): 1027–1035. <http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf>.
+init_z <- function(y, K, max_iter = 10, nstart = 10) {
+  # init++
+  N <- nrow(y)
+  p <- ncol(y)
+  x <- t(y) # easier to use columns
+  centers <- matrix(NA, p, K) # centers
+  icenters <- rep(NA, K-1) # indices of centers
+  minD <- rep(Inf, N) # current minimum distance vector
+  # initialize
+  icenters[1] <- sample(N,1)
+  centers[,1] <- x[,icenters[1]]
+  for(ii in 1:(K-1)) {
+    D <- colSums((x - centers[,ii])^2) # new distance
+    minD <- pmin(minD, D)
+    icenters[ii+1] <- sample(N, 1, prob = minD)
+    centers[,ii+1] <- x[,icenters[ii+1]]
+  }
+  centers <- t(centers)
+  colnames(centers) <- rownames(x)
+  # run kmeans with these centers
+  km <- kmeans(x = y, centers = centers, nstart = nstart, iter.max = max_iter)
+  km$cluster
+}
+
+
+
 #' @param Z A length- `N` vectir of integers between 1 and `K`
 #' @param rho A length-`K` probability vector of group membership.
-#' @param theta A `p x N` vector of observation means.
+#' @param theta A `N x p` vector of observation means.
 #' @param mu A `K x p` matrix of group means, where `K` is the number of mixture components and `p` is the dimension of each observation.
 #' @param Sigma A `p x p x K` matrix of group variances.
 #' @param rand_idx A scalar value bewteen `1` and `N` to indicate which z to condtion on. 
@@ -493,7 +532,7 @@ zFull.post<-function(Z, rho, theta, mu, Sigma, rand_idx, log=TRUE){
   ll<- rep(0, K)
   ll<- ll + log(rho)
   
-  theta_i<-theta[,rand_idx]
+  theta_i<-theta[rand_idx,]
   
   for(kk in 1:K){
     ll[kk]<- ll[kk] + dmNorm(theta_i, mu= mu[kk,], Sigma= Sigma[,,kk], log=TRUE)
@@ -506,6 +545,7 @@ zFull.post<-function(Z, rho, theta, mu, Sigma, rand_idx, log=TRUE){
 }
 
 
+################################ Unfinished Trial Sampler ############################################33
 #' @param y
 #' @param iter
 #' @param init_vals

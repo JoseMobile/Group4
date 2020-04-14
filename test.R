@@ -78,7 +78,7 @@ lld<-rep(0, num_sim)
 
 for ( i in 1: num_sim){
   z_i <- Z[rand_idx]
-  theta[,rand_idx]<- rmNorm(1, mu[z_i,], Sigma[,,z_i]) 
+  theta[rand_idx,]<- rmNorm(1, mu[z_i,], Sigma[,,z_i]) 
   ldu[i]<- nnm_post(mu, Sigma, rho[,1], y, V, theta, Z, vk, Omega)
   lld[i] <- theta_i.post(y, theta, V, mu, Sigma, Z, rand_idx)
 }
