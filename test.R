@@ -8,7 +8,7 @@ source('nnm-functions.R')
 K<-10
 N<-100
 p<-3 
-
+num_sim =10 
 data<- sim_data(K, N, p)
 rho <- data$rho
 y <- data$y
@@ -165,68 +165,5 @@ for ( i in 1: num_sim){
 }
 
 lld-ldu
-
-###################################  Testing Sampler ################################################
-
-
-#finMix_mod <- stan_model("finiteMixtures.stan")
-source('nnm-functions.R')
-K<-5
-N<-100
-p<-3 
-data<- sim_data(K, N, p)
-rho <- data$rho
-y <- data$y
-V <-data$V
-Z <- data$Z
-theta <- data$theta
-mu <-data$mu
-Sigma <-data$Sigma
-vk<-data$vk
-Omega<-data$Omega 
-
-
-for(i in 1:K){
-  cat(i, ":", sum(i==Z), "\n")
-}
-
-cat(dim(y))
-cat(length(Z))
-
-mu_init <- array(runif(K*p), dim =c(K, p))
-rho_init <- matrix(runif(K), nrow=K, ncol=1)
-rho_init[,1]<-rho_init[,1]/sum(rho_init[,1])
-theta_init <- array(runif(N*p), dim =c(N, p))
-sigma_init <- array(runif(K*p*p)*2-1, dim =c(p,p,K))
-for(i in 1:K){
-  sigma_init[,,i]<-t(sigma_init[,,i]) %*% sigma_init[,,i]
-}
-
-Z_init <- rep(0,N)
-  
-while(TRUE){
-  for (i in 1:N){
-    Z_init[i]<-rcategorical(rho_init)
-  }
-  if (proper_sample(Z_init, K)) break
-}
-
-for(i in 1:K){
-  cat(i, ":", sum(i==Z_init), "\n")
-}
-
-param_init = list(Sigma = sigma_init, mu= mu_init, theta=theta_init, rho=rho_init[,1], Z=Z_init, vk = vk, V= V, Omega= Omega)
-#param_list = list(param_init)
-
-system.time({
-  Theta<-gibbsSamples(y, 1e4, param_init, burnin_period= 1e3)
-})
-
-print(rho)
-print(Theta$mu[1,,])
-print(colMeans(Theta$rho))
-
-Theta$theta_samples
-
 
 

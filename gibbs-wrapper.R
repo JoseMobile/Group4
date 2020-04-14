@@ -1,27 +1,8 @@
-#' Solve method for variance matrices.
-#'
-#' @param V Variance matrix
-#' @param x Optional vector or matrix for which to solve system of equations.  If missing calculates inverse matrix.
-#' @param ldV Optionally compute log determinant as well.
-#' @return Matrix solving system of equations and optionally the log-determinant.
-#' @details This function is faster and more stable than `base::solve()` when `V` is known to be positive-definite.
-solveV <- function(V, x, ldV = FALSE) {
-  C <- chol(V) # cholesky decomposition
-  if(missing(x)) x <- diag(nrow(V))
-  # solve is O(ncol(C) * ncol(x)) with triangular matrices
-  # using backward subsitution
-  ans <- backsolve(r = C, x = backsolve(r = C, x = x, transpose = TRUE))
-  if(ldV) {
-    ldV <- 2 * sum(log(diag(C)))
-    ans <- list(y = ans, ldV = ldV)
-  }
-  ans
-}
-
-
+source('nnm-functions.R')
 
 
 #' Conditional update of theta using the random effects multivariate normal
+#' 
 #' 
 #' @param y A `n x p` matrix. Each row of y is an observation on p dimensions of the data
 #' @param V A `p x p x n` array of covariance matricies for each observation of y.
@@ -29,11 +10,11 @@ solveV <- function(V, x, ldV = FALSE) {
 #' @param Sigma A `p x p x K` array of covariance matricies. The k-th matrix is the covariance matrix for theta in class k.
 #' @param z A lenght `n` vector for the class observations of y.
 #' @details `n` is the number of observations of y. `p` is the dimension of each theta, i.e. the number features of the data. `K` is the number of possible classes of y. 
+#' 
 #' @return A `n x p` matrix. A random sample from the random effects multivariate normal distribution. If the return value is called theta then the details are as follows:
 #' theta ~ N(mu, Sigma)
 #' y | theta ~ N(theta, V)
-#'
-#'
+#' 
 update_theta <- function(y, V, mu, Sigma, z) {
   # dimension variables
   K <- nrow(mu) # classes
@@ -95,10 +76,12 @@ update_theta <- function(y, V, mu, Sigma, z) {
 
 #' Conditional update for `mu_k` by randomly sampling from the Multivariate Normal model with mean theta and variance proportional to Sigma (see details).
 #' 
+#' 
 #' @param theta Estimated random effects of the mixture-normal model. A `n x p` matrix. 
-#' @param old_mu Current estimated mu. A `K x p` matrix. 
+#' @param currMu Current estimated mu. A `K x p` matrix. 
 #' @param Sigma Variance matricies of theta. A `p x p x K` array.
 #' @param z Estimated classes of the y values. A `n x 1` vector.
+#' 
 #' @details `K` is the number of classes. `p` is the dimension of one observations of `theta_i`, i.e. the number of features. `n` is the number of observations. If a class `k` does not appear in the z vector, the `k`th row of the return matrix is the `k`th row of currMu. If a class has no observations in the z vector this mu is not updated because having a count of zero causes a division by zero.
 #' @return A `K x 1` vector of randomly sampled `mu_k` values from the distribution `mu_k ~ Normal(theta_k, Sigma_k/N_k)`
 #' ```
@@ -107,8 +90,8 @@ update_theta <- function(y, V, mu, Sigma, z) {
 update_mu <- function(theta, currMu, Sigma, z) {
   # number of classes, K. number of features, q
   SigmaDim <- dim(Sigma)
-  K <- SigmaDim[3]  # qxqx*K*
-  q <- SigmaDim[1]  # *q*xqxK
+  K <- SigmaDim[3]  # q x q x K
+  q <- SigmaDim[1]  # q x q x K
   
   # allocating space for class mean theta to be used
   classMeanTheta <- matrix(nrow = K, ncol = q) # Means, theta_k
@@ -146,50 +129,27 @@ update_mu <- function(theta, currMu, Sigma, z) {
   return(Mu)
 }
 
-# Other update_mu may have been causing problems 
-update_mu <- function(theta, Sigma, z) {
-  # number of classes, K. number of features, p
-  K <- dim(Sigma)[3]  
-  p <- ncol(theta)  
-  
-  classMeans <- matrix(nrow=K, ncol=p)
-  counts <- numeric(length=K)
-  for (k in 1:K){
-    # Find out which observations are in class k
-    ind <- which(z == k) 
-    # Extract class counts 
-    counts[k] <- length(ind)
-    
-    # Compute variance and expected value for MVN distribution
-    Sigma[, , k] <- Sigma[, , k] / counts[k]
-    if (counts[k] == 1){
-      classMeans[k, ] <- theta[ind, ]
-    }
-    else{
-      classMeans[k, ] <- colMeans(theta[ind, ])  
-    }
-  }
-  
-  mu <- rmNorm(K, classMeans, Sigma)
-  return(mu)
-}
 
 #' Samples an array of matrices denoting the covariance matrices for each cluster
+#' 
 #' 
 #' @param y A `n x p` matrix. Each row of y is an observation on p dimensions of the data.
 #' @param theta A `n x p` matrix where each row is an observation and the columns are a subset of a larger parameter set.
 #' @param mu An `K x p` vector denoting the prior cluster means.
 #' @param z A length `n` vector denoting the class that each row of theta belongs to.
-#' @param old_Sigma The current observation of the Sigma. A `p x p x K` array of covariance matrices.
+#' @param Omega The covariance matrixes of our chosen prior. 
+#' @param vK The virtual counts corresponding to mu of chosen prior
+#' 
 #' @return A `p x p x K` array of matrices sampled from the inverse-wishart distribution where the kth matrix
 #' denotes the posterior covariance matrix of the kth cluster.
 #' @details The array of matrices that is returned is  `Sigma_k | A \ \{theta_k\}` which had been sampled from
 #' ```
-#' `Inverse-Wishart(\sum{\Theta_i - mu_k},N - p - 1)` where N is a vector containing cluster counts
+#' `Inverse-Wishart(\sum{\Theta_i - mu_k},N + vK)` where N is a vector containing cluster counts
 #' , p is a vector of the sizes of theta and 1 is a vector of 1's. Assume that the dimension requirements
 #' are met
 #' ```
-update_Sigma <- function(y, theta, mu, z) {
+#' 
+update_Sigma <- function(y, theta, mu, z, Omega, vK) {
   # iterate through classes and make a new mu to match theta
   dim_mu <- dim(mu) # dimensions of mu c(K, p)
   K <- dim_mu[1] # rows are K
@@ -198,7 +158,6 @@ update_Sigma <- function(y, theta, mu, z) {
   
   expand_mu <- matrix(nrow = n, ncol = p) # allocate space for expanded mu
   count <- rep(NA, K) # allocate space for count of classes in z
-  Omega <- array(dim = c(p,p,K)) # allocate space for omega
   for (k in 1:K) {
     ind <- which(z == k) # indices of observations of class k
     # calculate count, number of class observations in z
@@ -206,9 +165,6 @@ update_Sigma <- function(y, theta, mu, z) {
     
     # fill in expand_mu with each class mean from mu
     expand_mu[ind,] <- matrix(mu[k,], nrow = count[k], ncol = p, byrow = TRUE)
-    
-    # fill omega array with variances of y
-    Omega[,,k] <- var(y) # variance matrix of y
   }
   # now the rows of theta and mu match so that the i-th row of mu is the mean
   # for the i-th row of theta
@@ -231,7 +187,7 @@ update_Sigma <- function(y, theta, mu, z) {
   }
   
   # calculate nu
-  nu <- count + p + 2 # a vector of length K
+  nu <- count + vK # a vector of length K
   
   Sigma <- riwish(K, Psi, nu)
   
@@ -239,14 +195,16 @@ update_Sigma <- function(y, theta, mu, z) {
 }
 
 
-
 #' Samples cluster memberships probabilities from a Dirichlet distribution 
+#' 
 #' 
 #' @param theta An 'n x p' matrix, where row i is the parameters of observation i.
 #' @param mu An 'K x p' matrix where the row k is expected value of theta if theta is in class k.
 #' @param Sigma A 'p x p x K' array of variance-covariance matrices for each class k.
 #' @param Z An 'n x 1' vector of class memberships for each observation
+#' 
 #' @return An 'n x 1' vector of updated class membership probabilities.
+#' 
 update_rho <- function(theta, mu, Sigma, Z){
   # Initialize constants and pre-allocate memory
   K <- nrow(mu) 
@@ -259,41 +217,44 @@ update_rho <- function(theta, mu, Sigma, Z){
   }
   
   # Generate tau's 
-  tau <- sapply(alpha, FUN=function(a){ rgamma(1, a, 1) })
-  rho <- tau / sum(tau)
+  rho<-rdirichlet(1, alpha)
   return(rho)
 }
 
+
 #' Samples group memberships from a multinomial distribution conditioned on the other parameters 
+#' 
 #' 
 #' @param theta An 'n x p' matrix, where row i is the parameters of observation i.
 #' @param mu An 'K x p' matrix where the row k is expected value of theta if theta is in class k.
 #' @param Sigma A'p x p x K' array of variance-covariance matrices for each class k.
 #' @param rho An 'K x 1' vector of class membership probabilities 
 #' @param give.Lambda A T/F value indicating whether Lambda matrix of probabilities should be returned as well
+#' 
 #' @return An 'n x 1' vector of updated class memberships, or if give.Lambda=TRUE, returns a list that contains the 'n x 1' updated class memberships and the computed 'n x k' Lambda matrix.
+#' 
 update_z <- function(theta, mu, Sigma, rho){
   # Initialize constants and pre-allocate memory
   K <- length(rho) 
   N <- nrow(theta)
   Kappa <- matrix(NA, nrow=N, ncol=K) 
   
-  # Compute inverses and log-determinants for each covariance matrix 
-  inv_sigma <- vector("list", length=K)
-  for (k in 1:K){
-    inv_sigma[[k]] <- solveV(Sigma[, , k], ldV=TRUE)
-  }
-  log_det <- sapply(inv_sigma, FUN=function(z){ z$ldV }) 
-  log_rho <- log(rho)
-  
-  # Compute the Kappa matrix 
-  for (i in 1:N){
-    for (k in 1:K){
-      temp <- as.matrix(theta[i, ] - mu[k, ])
-      Kappa[i, k] <- log_rho[k] - (t(temp) %*% inv_sigma[[k]]$y %*% temp + log_det[k]) / 2
-    }
-  }
-  
+  # Compute inverses and log-determinants for each covariance matrix
+   inv_sigma <- vector("list", length=K)
+   for (k in 1:K){
+     inv_sigma[[k]] <- solveV(Sigma[, , k], ldV=TRUE)
+   }
+   log_det <- sapply(inv_sigma, FUN=function(z){ z$ldV })
+   log_rho <- log(rho)
+
+  # Compute the Kappa matrix
+   for (i in 1:N){
+     for (k in 1:K){
+       temp <- as.matrix(theta[i, ] - mu[k, ])
+       Kappa[i, k] <- log_rho[k] - (t(temp) %*% inv_sigma[[k]]$y %*% temp + log_det[k]) / 2
+     }
+   }
+
   # Compute the matrix of multinomial probabilties
   Lambda <- exp(Kappa)
   Lambda <- Lambda / rowSums(Lambda) 
@@ -301,27 +262,14 @@ update_z <- function(theta, mu, Sigma, rho){
   
   # Keep re-sampling until at least one observation in each cluster
   while(TRUE){
-    for (i in 1:N){
-      # Sample 1 observation from multinomial to determine class chosen
-      s <- rmultinom(1, 1, Lambda[i, ])
-      
-      # Extract class number
-      Z[i] <- which(s != 0)
-    }
-    
-    # Extract class counts 
-    counts <- numeric(length=K)
-    for (k in 1:K){
-      counts[k] <- sum(Z == k)
-    }
-    print(counts)
-    if (!(any(counts == 0))){
-      break
-    }
+    Z<- rcategorical(t(Lambda))
+    if (proper_sample(Z, K)) break 
   }
   
   return(list(z=Z, Lambda=Lambda))
 }
+
+###########################################################################################3
 
 
 #' Performs Gibbs Sampling given desired number of clusters and data
@@ -352,7 +300,7 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
     Omega<- array(rep(0, p*p*K), dim=c(p,p,K))
     
     for(i in 1:K)
-      Omega[,,i]<- var(data)
+      Omega[,,i]<- var(data) *(N-1)/(N-p)
   } else {
     if ( (! "Vk" %in% names(prior) ) || (!"Omega" %in% names(prior)) )
       stop("prior needs Vk and Omega params!")
@@ -374,9 +322,10 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
     
     # set rho to proportion of each observation
     count <- as.numeric(table(old_z))
-    old_rho <- count/N 
+    
     # table gives count of each observation of class
     # then dividing by N gives the proportion
+    old_rho <- count/N
     
     # set theta to observed data
     old_theta <- data
@@ -390,7 +339,7 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
       if (count[k] > p) { # enough data to sample both mu and Sigma
         old_mu[k,] <- colMeans(data[ind,]) # sample mu
         # sample Sigma, var() scaled by n-1, so rescale to n-p
-        old_Sigma[,,k] <- var(data) * (count[k]-1)/(count[k]-p)
+        old_Sigma[,,k] <- var(data[ind,]) * (count[k]-1)/(count[k]-p)
       } else {
         # not enough data for Sigma, so use data variance
         old_Sigma[,,k] <- data_var
@@ -438,7 +387,11 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
   #   If not check the function calls and standardize them
   for (m in 1:(burnin_period +numIter)){
     # Call the update functions
-    #  Check the dimensions of the return values match the other functions 
+    
+    #Keep Track of Current Iteration Number
+    if (mod(m, 200) ==0 ){
+      cat("Iteration #", m, "\n")
+    }
     
     if (!theta.fixed){
     # Update theta, a 'N x p' matrix of random effects of y
@@ -446,19 +399,19 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
     }
     if (!mu.fixed){
     # Update mu, a 'K x p' matrix of class averages of theta
-      new_mu <- update_mu(old_theta, old_Sigma, old_z)
+      new_mu <- update_mu(new_theta, old_mu, old_Sigma, old_z)
     }
     if(!Sigma.fixed){
     # Update Sigma, a 'p x p x K' array of covariance matricies
-      new_Sigma <- update_Sigma(data, old_theta, old_mu, old_z)
+      new_Sigma <- update_Sigma(data, new_theta, new_mu, old_z, Omega, Vk)
     }
     if(!rho.fixed){
     # Update rho, a K x 1 vector
-      new_rho <- update_rho(old_theta, old_mu, old_Sigma, old_z)
+      new_rho <- update_rho(new_theta, new_mu, new_Sigma, old_z)
     }
     if (!z.fixed){
     # Update z, an N x 1 vector
-      new_z <- update_z(old_theta, old_mu, old_Sigma, old_rho)
+      new_z <- update_z(new_theta, new_mu, new_Sigma, new_rho)
     }
     
     # Store theta and z values if desired
@@ -473,7 +426,7 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
       
       rho[ ,curIdx]<- new_rho
       mu[ , ,curIdx]<- new_mu
-      Sigma[ , , ,curIdx]<- new_Sigma
+      Sigma[ , , ,curIdx]<-  new_Sigma
       total_Lambda <- total_Lambda + new_z$Lambda
     }
     
