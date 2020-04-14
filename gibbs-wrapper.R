@@ -96,7 +96,7 @@ update_theta <- function(y, V, mu, Sigma, z) {
 #' Conditional update for `mu_k` by randomly sampling from the Multivariate Normal model with mean theta and variance proportional to Sigma (see details).
 #' 
 #' @param theta Estimated random effects of the mixture-normal model. A `n x p` matrix. 
-#' @param old_mu Current estimated mu. A `K x p` matrix. 
+#' @param currMu Current estimated mu. A `K x p` matrix. 
 #' @param Sigma Variance matricies of theta. A `p x p x K` array.
 #' @param z Estimated classes of the y values. A `n x 1` vector.
 #' @details `K` is the number of classes. `p` is the dimension of one observations of `theta_i`, i.e. the number of features. `n` is the number of observations. If a class `k` does not appear in the z vector, the `k`th row of the return matrix is the `k`th row of currMu. If a class has no observations in the z vector this mu is not updated because having a count of zero causes a division by zero.
@@ -147,7 +147,7 @@ update_mu <- function(theta, currMu, Sigma, z) {
 }
 
 # Other update_mu may have been causing problems 
-update_mu <- function(theta, Sigma, z) {
+update_mu <- function(theta, currMu, Sigma, z) {
   # number of classes, K. number of features, p
   K <- dim(Sigma)[3]  
   p <- ncol(theta)  
@@ -160,13 +160,23 @@ update_mu <- function(theta, Sigma, z) {
     # Extract class counts 
     counts[k] <- length(ind)
     
-    # Compute variance and expected value for MVN distribution
-    Sigma[, , k] <- Sigma[, , k] / counts[k]
-    if (counts[k] == 1){
-      classMeans[k, ] <- theta[ind, ]
+    if (counts[k] == 0){
+      # Keep old cluster mean for empty clusters
+      
+      # Use 0 variance to guaranteed sample old cluster mean
+      Sigma[, , k] <- matrix(0, nrow=p, ncol=p) 
+      classMeans[k, ] <- currMu[k, ]
     }
     else{
-      classMeans[k, ] <- colMeans(theta[ind, ])  
+      # Compute variance 
+      Sigma[, , k] <- Sigma[, , k] / counts[k]
+      # Compute sample cluster means
+      if (counts[k] == 1){
+        classMeans[k, ] <- theta[ind, ]
+      }
+      else{
+        classMeans[k, ] <- colMeans(theta[ind, ])  
+      }
     }
   }
   
@@ -299,31 +309,19 @@ update_z <- function(theta, mu, Sigma, rho){
   # Compute the matrix of multinomial probabilties
   Lambda <- exp(Kappa)
   Lambda <- Lambda / rowSums(Lambda) 
+  
   Z <- numeric(length=N)
   
-  # Keep re-sampling until at least one observation in each cluster
-  while(TRUE){
-    for (i in 1:N){
-      # Sample 1 observation from multinomial to determine class chosen
-      s <- rmultinom(1, 1, Lambda[i, ])
+  for (i in 1:N){
+    # Sample 1 observation from multinomial to determine class chosen
+    s <- rmultinom(1, 1, Lambda[i, ])
       
-      # Extract class number
-      Z[i] <- which(s != 0)
-    }
-    
-    # Extract class counts 
-    counts <- numeric(length=K)
-    for (k in 1:K){
-      counts[k] <- sum(Z == k)
-    }
-    print(counts)
-    if (!(any(counts == 0))){
-      break
-    }
+    # Extract class number
+    Z[i] <- which(s != 0)
   }
-  
   return(list(z=Z, Lambda=Lambda))
 }
+
 
 
 #' Performs Gibbs Sampling given desired number of clusters and data
