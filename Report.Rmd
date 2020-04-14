@@ -20,34 +20,93 @@ As dimensionality and data size increases, the computational time needed to perf
 
 # Methodology 
 
-(??? Notation z_i ~ Multinomial(K, rho) in notes ??? Want notation to draw a cluster number from K clusters)
+(Left out some details such as log-likelihood simplifications and details of the prior and how to choose Omega and Nu)
 
+(Also didn't include details as to how we drew things, like in rho update, says to draw from Gamma distribution to get Dirichlet)
+
+(Should we add more details in appendix and reference it? )
 
 The first assumption this method makes is that the observed data follows a mixture normal distribution, $x_i \sim \sum_{k=1}^K \rho_k N(\mu_k, \Sigma_k), i = 1, ..., N$ and are independent and identically distributed. Then following this, we take a Bayesian inference approach where the unknown, but true cluster memberships follows a multinomial distribution, $z_i \sim \text{Multinomial}(K, \rho)$ where $\rho = (\rho_1, ..., \rho_K)$ and $(N_1, ..., N_k) \sim \text{Multinomial}(N, \rho)$. However, a problem with this is that it quickly suffers from the curse of dimensionality as the dimension of $x_i$ increases and causes this mixture-normal model to fail. 
 
-The solution to this was to instead assume that the x's belonged to a family of models, where the distribution of each $x_i$ depended on its own parameter $\theta_i$. Then instead of assuming that the x's followed a mixture-normal, we assume that the $\theta$'s follow a mixture-normal. Where $\theta_i \in \rm{I\!R}^p$, such that p is much smaller than N and will not severely suffer from the curse of dimensionality. As in: 
+The solution to this was to instead assume that the x's belonged to a family of models $f(x_i|\theta_i)$, where the distribution of each $x_i$ depended on its own parameter $\theta_i$. Then instead of assuming that the x's followed a mixture-normal, we assume that the $\theta$'s follow a mixture-normal. Where $\theta_i \in \rm{I\!R}^p$, such that p is much smaller than N and will not severely suffer from the curse of dimensionality. As in: 
 
 $$
-\theta_i \overset{iid}{\sim} \sum_{k=1}^K \rho_k N(\mu_k, \Sigma_k), i = 1, ..., N \\ 
+\theta_i \overset{iid}{\sim} \sum_{k=1}^K \rho_k N(\mu_k, \Sigma_k), i = 1, ..., N  
+$$
+$$
 x_i | \theta_i \overset{ind}{\sim} f(x_i | \theta_i) 
 $$
 
-(Need to choose an f(x_i|theta_i) such that it's easy to)
-
-
-In this setup, $\theta_i$ is an unknown and random parameter and this assumed model is also known as a "random-effects" model. The standard fixed and unknown parameters that are used to define cluster sizes and membership probabilities are $\psi_k = (\rho_k, \mu_k, \Sigma_k)$. 
+Where $\theta_i$ and $f(x_i|\theta_i)$ are chosen based on the data and problem at hand and needs to be decided before the Gibbs sampler can be used. In this setup, $\theta_i$ is an unknown and random parameter and this assumed model is also known as a "random-effects" model. The standard fixed and unknown parameters that are used to define cluster sizes and membership probabilities are $\psi_k = (\rho_k, \mu_k, \Sigma_k)$.  
 
 However, the problem is still too difficult to deal with, and impossible to do analytically, and requires further simplifcation. Let $\hat{\theta}_i = \text{arg max}_{\theta} f(x_i|\theta)$, the maximum likelihood estimate of $\theta_i$ from our observed data, and $\hat{V}_i = - [\frac{\partial}{\partial \theta^2} \log(f(x_i | \hat{\theta}_i))]^{-1}$ denote the observed Fisher information. 
 
-
-(Should show closed form expression for theta_hat_i and V_i after choosing f(x_i|theta_i) family)
-
-
-Then we can approximate our above clustering model simply using the asymptotic properties of MLE which gives the following 
+Then we can approximate our above clustering model simply using the asymptotic properties of MLE which gives the following results:
 
 $$
-\theta_i \overset{iid}{\sim} \sum_{k=1}^K \rho_k N(\mu_k, \Sigma_k), i = 1, ..., N \\
+\theta_i \overset{iid}{\sim} \sum_{k=1}^K \rho_k N(\mu_k, \Sigma_k), i = 1, ..., N 
+$$
+$$
 \hat{\theta}_i | \theta \overset{ind}{\sim} N(\theta_i, \hat{V}_i)
 $$
+
+This gives the result: $\hat{\theta}_i|\{z_i = k\} \sim N(\mu_k, \hat{V}_i + \Sigma_k)$. Then using this and the previous assumptions, and letting $\hat{\theta}_i = y_i$ be our observed data, we have the result: 
+
+$$
+z_i \overset{iid}{\sim} \text{Multinomial}(K, \rho) 
+$$
+$$
+\theta_i | z_i \overset{ind}{\sim} N(\mu_{z_i}, \Sigma_{z_i}) 
+$$
+$$
+y_i | \theta_i \overset{ind}{\sim} N(\theta_i, V_i) 
+$$
+
+Where $Y = (y_1, ..., y_N) = (\hat{\theta}_1, ... ,\hat{\theta}_N)$ is the observed data, and both $z = (z_1, ..., z_N)$ and $\Theta = (\theta_1, ..., \theta_N)$ are the missing, unobserved data. Then we can construct a complete likelihood function for our parameters $\Psi = (\psi_1, ..., \psi_K), \psi_k = (\rho_k, \mu_k, \Sigma_k)$, by assuming that the missing data was observed: 
+
+$$
+l(\Psi|z, \Theta, Y) = \log [p(Y, \Theta, z,| \Psi)] = \log[\Pi_{i=1}^N p(y_i| \theta_i, \Psi) * p(\theta_i|z_i, \Psi) * p(z_i|\Psi)]
+$$
+
+Where we know the distributions of each of these density functions from our previous assumptions. Now, the problem is to estimate the parameters when we have missing data, which will be done using Bayesian inference and an noninformative improper prior: 
+
+$$
+\pi(\Psi) ~ \alpha ~ \Pi_{k=1}^K |\Sigma_k|^{-(\nu_k + p + 1) /2} \exp(-\frac{1}{2}\text{tr}(\Sigma_k^{-1} \Omega_k))
+$$
+Where p is the size of each $\theta_i$, $\Omega_k$ is a p by p symmetric positive definite matrix and $\nu_k$ are constants. There are certain ways to choose $\Omega_k$ and $\nu_k$, but we will skip the details.  
+
+Then using the prior and the above log likelihood, we can construct a posterior probability and a respective likelihood, $p(\Psi, z, \Theta|Y)$ $\alpha$ $p(Y, \Theta, z|\Psi) \pi(\Psi)$, using Bayes. Then we can simplify this posterior likelihood by conditioning on different parameters. 
+
+If we let $\Phi = (Y, \Theta, z, \Psi)$ denote all the variables in the model and $\Phi \backslash \{\theta_i\}$ denote all variables excluding $\theta_i$. Then by simplifying the complete posterior likelihood by assuming all given terms are constant, it can be shown that:
+
+$$
+\theta_i | \Phi \backslash \{\theta_i\} \sim N(G_i(y_i - \mu_{z_i}) + \mu_{z_i}, G_i V_i) \text{ where } G_i = \Sigma_{z_i} (V_i + \Sigma_{z_i})^{-1}
+$$
+
+And that when conditioned on all other variables, all $\theta_i$'s are conditionally independent, as in $\theta_i|\Phi \backslash \{\theta_i\} \overset{\text{distribution}}{=} \theta_i|\Phi \backslash \{\Theta\}$. 
+
+A similar result can be shown for the other variables where: 
+
+$$
+\mu_k | \Phi \backslash \{\mu_k\} \overset{ind}{\sim} N(\bar{\theta}_k, \Sigma_k / N_k) \text{ where } N_k = \sum_{i=1}^N \rm I\!I (z_i = k) 
+$$
+$$
+\Sigma_k | \Phi \backslash \{\Sigma_k\} \overset{ind}{\sim} \text{InvWish}(\Omega_k + \sum_{i:z_i=k} (\theta_i - \mu_K)(\theta_i - \mu_k)', N_k + \nu_k) 
+$$
+$$
+\rho_k | \Phi \backslash \{\rho_k\} \overset{ind}{\sim} \text{Dirichlet}(\alpha) \text{ where } \alpha = (N_1 + 1, ..., N_K + 1) 
+$$
+$$
+z_i | \Phi \backslash \{z_i\} \overset{ind}{\sim} \text{Multinomial}(K, \lambda_i) \text{ where } \lambda_{ik} = \frac{\exp(\kappa_{ik})}{\sum_{m=1}^K \exp(\kappa_{im})} 
+$$
+
+Where $\kappa_{ik} = \log(P(z_i = k|\Phi \backslash \{z_i\}))= \log(\rho_k) - \frac{1}{2}[(\theta_i - \mu_k)'\Sigma_k^{-1}(\theta_i - \mu_k)' + \log |\Sigma_k|]$ 
+
+And each of these variables are conditionally independent, which allows us to sample everything in 5 steps: simultaneously sample all $\theta_i, i = 1,..., n$, then simultaneously sample all $mu_k, k = 1, ..., K$, and so on and so forth for each of the variables. Where we repeat these 5 steps every iteration of the Gibbs sampler, for M desired iterations. 
+
+Then we can estimate the posterior probability by $P(z_i = k|Y) \approx \hat{\lambda}_{ik}$ where $\hat{\lambda}_{ik} = [\hat{\Lambda}]_{ik}, \hat{\Lambda} = \frac{1}{M} \sum_{m=1}^M \Lambda^{(m)}$. Where $\Lambda^{(m)}$ is the $\Lambda$ matrix created in the mth iteration used to sample z. 
+
+
+
 
 
