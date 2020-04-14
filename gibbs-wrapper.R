@@ -258,13 +258,8 @@ update_z <- function(theta, mu, Sigma, rho){
   # Compute the matrix of multinomial probabilties
   Lambda <- exp(Kappa)
   Lambda <- Lambda / rowSums(Lambda) 
-  Z <- numeric(length=N)
-  
-  # Keep re-sampling until at least one observation in each cluster
-  while(TRUE){
-    Z<- rcategorical(t(Lambda))
-    if (proper_sample(Z, K)) break 
-  }
+
+  Z <- rcategorical(t(Lambda))
   
   return(list(z=Z, Lambda=Lambda))
 }
