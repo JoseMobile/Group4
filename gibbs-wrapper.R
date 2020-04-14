@@ -116,15 +116,20 @@ update_mu <- function(theta, old_mu, Sigma, z) {
     # Class mean theta has rows of classMeanTheta filled with mean of class
     if (count > 1) { # more than one observation of class
       classMeanTheta[kk,] <- colMeans(theta[zInd,])
+      
+      # Calculating scaled Sigma, divided by count of kk in z
+      Sigma[,,kk] <- Sigma[,,kk]/count
     } else if (count == 1) { # only one observation of class
       classMeanTheta[kk,] <- theta[zInd,]
+      
+      # Calculating scaled Sigma, divided by count of kk in z
+      Sigma[,,kk] <- Sigma[,,kk]/count
     } else { # no observations of class
       classMeanTheta[kk,] <- rep(0, q) # fill in theta so that can sample
       replaceMu[kk] <- TRUE # boolean variable used after samplin to replace row
     }
     
-    # Calculating scaled Sigma, divided by count of kk in z
-    Sigma[,,kk] <- Sigma[,,kk]/count
+
   }
   
   Mu <- rmNorm(K, classMeanTheta, Sigma) # sample Mu
