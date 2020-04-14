@@ -446,19 +446,19 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
     }
     if (!mu.fixed){
     # Update mu, a 'K x p' matrix of class averages of theta
-      new_mu <- update_mu(old_theta, old_Sigma, old_z)
+      new_mu <- update_mu(new_theta, old_mu, old_Sigma, old_z)
     }
     if(!Sigma.fixed){
     # Update Sigma, a 'p x p x K' array of covariance matricies
-      new_Sigma <- update_Sigma(data, old_theta, old_mu, old_z)
+      new_Sigma <- update_Sigma(data, new_theta, new_mu, old_z)
     }
     if(!rho.fixed){
     # Update rho, a K x 1 vector
-      new_rho <- update_rho(old_theta, old_mu, old_Sigma, old_z)
+      new_rho <- update_rho(new_theta, new_mu, new_Sigma, old_z)
     }
     if (!z.fixed){
     # Update z, an N x 1 vector
-      new_z <- update_z(old_theta, old_mu, old_Sigma, old_rho)
+      new_z <- update_z(new_theta, new_mu, new_Sigma, new_rho)
     }
     
     # Store theta and z values if desired
