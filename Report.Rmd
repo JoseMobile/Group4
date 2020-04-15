@@ -106,7 +106,75 @@ And each of these variables are conditionally independent, which allows us to sa
 
 Then we can estimate the posterior probability by $P(z_i = k|Y) \approx \hat{\lambda}_{ik}$ where $\hat{\lambda}_{ik} = [\hat{\Lambda}]_{ik}, \hat{\Lambda} = \frac{1}{M} \sum_{m=1}^M \Lambda^{(m)}$. Where $\Lambda^{(m)}$ is the $\Lambda$ matrix created in the mth iteration used to sample z. 
 
+# Results 
 
+```{r, fig.width=7, fig.height=5}
+source("gibbs-wrapper.R")
 
+hbe_fit <- readRDS("hbe-fbm_fit_v1.rds")
+N <- length(hbe_fit)
+p <- length(hbe_fit[[1]]$coef)
 
+# Extract data 
+wts <- vector(length=N)
+theta_hat <- matrix(nrow=N, ncol=p)
+colnames(theta_hat) <- names(hbe_fit[[1]]$coef)
+obs_info <- array(dim=c(p, p, N))
+for (i in 1:N){
+  theta_hat[i, ] <- hbe_fit[[i]]$coef
+  wts[i] <- hbe_fit[[i]]$wt
+  obs_info[, , i] <- hbe_fit[[i]]$vcov
+}
+
+# Transform the wts into numeric labels
+lab <- unique(wts) 
+K <- length(lab)
+cluster <- numeric(length=N)
+for (i in 1:N){
+  if (wts[i] == lab[1]){
+    cluster[i] <- 1
+  }
+  else if (wts[i] == lab[2]){
+    cluster[i] <- 2
+  }
+  else if (wts[i] == lab[3]){
+    cluster[i] <- 3
+  }
+  else if (wts[i] == lab[4]){
+    cluster[i] <- 4
+  }
+  else if (wts[i] == lab[5]){
+    cluster[i] <- 5
+  }
+  else{
+    cluster[i] <- 6
+  }
+}
+
+real_N_k <- numeric(length=K)
+for (k in 1:K){
+  real_N_k[k] <- sum(cluster == k)
+}
+
+cols <- c(adjustcolor("orange", 0.5), adjustcolor("green", 0.1), 
+          adjustcolor("steelblue", 0.5), adjustcolor("turquoise", 0.5), 
+          adjustcolor("red", 0.1), adjustcolor("purple", 0.4))
+
+whole_col <- cols[cluster]
+whole_data <- cbind(cluster, theta_hat)
+colnames(whole_data) <- c("wt", colnames(theta_hat))
+pairs(whole_data, col=whole_col)
+```
+
+Based on the pairs plot of the data, coloured based on the true weight clustering. It looks as though there is little promise to clustering based on the provided data. For mu1, mu2, lambda, and nu, the pairs plots of each against weight shows that they all overlap, that there is little promise to clustering using these variables. 
+
+For kappa, there looks to be potential to do some basic clustering, where kappa seems to have some potential to split the data into cluster 6 vs not cluster 6. Similarly, logD seems like it could potentially make clusters of cluster 1, cluster 6 or the rest. 
+
+However, these possibilities are assuming that the model knows the true cluster memberships. The Gibbs sampler we created is for a clustering method, which means that the true cluster label is unknown. Thus, ignoring the first column and first row of the pairs plot and removing the colouring indicating the true clusters, we can look at a new pairs plot. 
+
+```{r, fig.width=7, fig.height=5}
+pairs(theta_hat)
+```
+
+This pairs plot is much closer to the actual clustering problem where none of the true clustering behaviour is known. In all of the pairs plots, there does not seem to be any unique pairwise relationship between the predictors. In all of the plots, the pariwise relationship seems to be constant and there seems to be no visual indicators as to the existence of different clusters. 
 
