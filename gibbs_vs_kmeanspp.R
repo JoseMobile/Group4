@@ -70,7 +70,9 @@ gibb_cols[gibb_cols == FALSE] <- "green"
 #plot(cluster, fitted_clusters,col = gibb_cols, xlab = "true_cluster",ylab="fitted_clusters",main ="real cluster vs fitted")
 scatter3D(x = cluster,y=fitted_clusters,z = index,col = gibb_cols,xlab="true_cluster",ylab="fitted_cluster",zlab="index",phi=-20,theta=-30,main = "real cluster vs fitted")
 
-# clustering with kmeans++ algorithm
+# clustering real data with kmeans++ algorithm
+# note since kmeans starts with random centroids, individual kmeans can have different results.
+# We will conduct many kmeans and aggregate the results
 
 #' Initial cluster allocation.
 #'
@@ -108,26 +110,29 @@ init_z <- function(y, K, max_iter = 10, nstart = 10) {
   km$cluster
 }
 
-max_iters <- 10000
-kmeans_results <- matrix(nrow = N,ncol = max_iters)
+max_iters <- 10000  # set number of kmeans to run
+kmeans_results <- matrix(nrow = N,ncol = max_iters) # pre-allocate matrix
 
-
+# simple function to calculate the mode in vector of numbers
 Mode <- function(x) {
   ux <- unique(x)
   ux[which.max(tabulate(match(x, ux)))]
 }
 
+# get results from max_iters kmeans
 for (iter in 1:max_iters){
   kmeans_results[,iter] <- init_z(y = theta_hat,K = 6)
 }
 
-fitted_clusters1 <- matrix(nrow = N,ncol = 1)
+fitted_clusters1 <- matrix(nrow = N,ncol = 1) # pre-allocate matrix to store estimated clusters
 
+# the mode cluster membership for each observation becomes the estimate cluster membership
 for (row in 1:N){
   fitted_clusters1[row,] <- Mode(kmeans_results[row,])
 }
 
 err1 <- sum(cluster != fitted_clusters1) / N
+err1
 # kmeans++ x 10000 performs badly (> 75% error) but still performed better than the gibbs sampler (> 80% error) 
 # setting colors for plotting
 kmeans_cols <- (cluster != fitted_clusters1)
@@ -138,8 +143,9 @@ kmeans_cols[kmeans_cols == FALSE] <- "green"
 #plot(cluster, fitted_clusters1,col = gibb_cols, xlab = "true_cluster",ylab="fitted_clusters",main ="real cluster vs fitted (kmeans++ x 10000)")
 scatter3D(x = cluster,y=fitted_clusters1,z = index,col = kmeans_cols,xlab="true_cluster",ylab="fitted_cluster",zlab="index",phi=-20,theta=-30,main = "real cluster vs fitted (kmeans++ x 10000)")
 
-
-# testing with standardized data (data between -1 and 1)
+#-----------------------------------------------------------------------------------------------------------
+# testing with standardized data (data centered at 0 with sd of 1)
+#-----------------------------------------------------------------------------------------------------------
 theta_hat_scaled <- scale(theta_hat)
 
 # fit gibbs sampler
@@ -148,7 +154,7 @@ gibbs_fit1 <- gibbsSampler(data=theta_hat_scaled, V=obs_info, burnin_period=1e3,
 # get estimated cluster affiliation from gibbs sampler
 fitted_clusters2 <- numeric(length=N)
 for (i in 1:N){
-  fitted_clusters[i] <- which.max(gibbs_fit1$Lambda[i, ])
+  fitted_clusters2[i] <- which.max(gibbs_fit1$Lambda[i, ])
 }
 
 # error rate
@@ -167,18 +173,20 @@ scatter3D(x = cluster,y=fitted_clusters2,z = index,col = gibb_cols1,xlab="true_c
 max_iters <- 10000
 kmeans_results1 <- matrix(nrow = N,ncol = max_iters)
 
+# get results from max_iters kmeans
 for (iter in 1:max_iters){
   kmeans_results1[,iter] <- init_z(y = theta_hat_scaled,K = 6)
 }
 
-fitted_clusters3 <- matrix(nrow = N,ncol = 1)
+fitted_clusters3 <- matrix(nrow = N,ncol = 1) # pre-allocate matrix
 
+# the mode cluster membership for each observation becomes the estimate cluster membership
 for (row in 1:N){
   fitted_clusters3[row,] <- Mode(kmeans_results1[row,])
 }
 
 err3 <- sum(cluster != fitted_clusters3) / N
-# kmeans++ x 10000 performs badly (> 75% error) but still performed better than the gibbs sampler (> 80% error) 
+# kmeans++ x 10000 performs badly (> 75% error) but still performed similar to the gibbs sampler  
 # setting colors for plotting
 kmeans_cols1 <- (cluster != fitted_clusters3)
 kmeans_cols1[kmeans_cols1 == TRUE] <- "red"
@@ -188,4 +196,45 @@ kmeans_cols1[kmeans_cols1 == FALSE] <- "green"
 #plot(cluster, fitted_clusters1,col = gibb_cols, xlab = "true_cluster",ylab="fitted_clusters",main ="real cluster vs fitted (kmeans++ x 10000)")
 scatter3D(x = cluster,y=fitted_clusters3,z = index,col = kmeans_cols1,xlab="true_cluster",ylab="fitted_cluster",zlab="index",phi=-20,theta=-30,main = "real cluster vs fitted (kmeans++ x 10000)")
 
+#--------------------------------------------
+# clustering with simulated data
+
+n <- 600
+A <- runif(n = 200,min = -1, max = 1)
+B <- runif(n = 200, min = 100, max = 110)
+C <- runif(n = 200, min = -200, max = -190 )
+D <- runif(n = n, min = -5, max = 5)
+
+sim_data <- matrix(nrow = n,ncol = 2)
+sim_data[,1] <- c(A,B,C)
+sim_data[,2] <- D
+var_sim1 <- var(sim_data[,1])
+var_sim2 <- var(sim_data[,2])
+cov_sim <- cov(sim_data[,1],sim_data[,2])
+sim_obs_info <- solve(matrix(data = c(var_sim1,cov_sim,
+                                cov_sim,var_sim2),nrow = 2,ncol=2,byrow=TRUE)) # inverse of fisher obvs is the asymptotic covariance matrix,
+                                                                              # we will use the inverse of the observed covariance matrix as an estimate for the fisher obvs
+
+
+plot(x=sim_data[,1],y=sim_data[,2])
+
+# fit gibbs sampler
+gibbs_fit2 <- gibbsSampler(data=sim_data, V=sim_obs_info, burnin_period=1e3, numIter=1e4, K=3, Theta.out=FALSE, z.out=FALSE)
+
+# get estimated cluster affiliation from gibbs sampler
+fitted_clusters4 <- numeric(length=n)
+for (i in 1:600){
+  fitted_clusters4[i] <- which.max(gibbs_fit2$Lambda[i, ])
+}
+
+# indices
+index1 <- 1:n
+# error rate
+sim_results <- as.data.frame(sim_data)
+sim_results$col <- fitted_clusters4
+sim_results$col[sim_results$col == 1] <- "red"
+sim_results$col[sim_results$col == 2] <- "green"
+sim_results$col[sim_results$col == 3] <- "blue"
+
+plot(x=sim_results$V1,y = sim_results$V2,col = sim_results$col, main="clusters determined by gibbs sampler")
 
