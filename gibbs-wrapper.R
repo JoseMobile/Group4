@@ -269,7 +269,7 @@ update_z <- function(theta, mu, Sigma, rho){
   return(list(z=Z, Lambda=Lambda))
 }
 
-###########################################################################################3
+###########################################################################################
 
 
 #' Performs Gibbs Sampling given desired number of clusters and data
