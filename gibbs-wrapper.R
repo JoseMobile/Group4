@@ -1,6 +1,7 @@
 source('nnm-functions.R')
 
 
+
 #' Conditional update of theta using the random effects multivariate normal
 #' 
 #' 
@@ -15,6 +16,7 @@ source('nnm-functions.R')
 #' theta ~ N(mu, Sigma)
 #' y | theta ~ N(theta, V)
 #' 
+
 update_theta <- function(y, V, mu, Sigma, z) {
   # dimension variables
   K <- nrow(mu) # classes
@@ -28,6 +30,7 @@ update_theta <- function(y, V, mu, Sigma, z) {
   new_mu <- matrix(nrow = n, ncol = p)
   new_Sigma <- array(dim = c(p,p,n))
   count <- numeric(length = K)
+
   
   for (k in 1:K) {
     # iterate through classes and fill in new mu and Sigma with
@@ -36,9 +39,12 @@ update_theta <- function(y, V, mu, Sigma, z) {
     ind <- which(z == k) # indices for z that are equal to k
     count[k] <- length(ind) # number of observations of class k
     # fill in all of new_mu with class mean k with index in ind
-    new_mu[ind,] <- matrix(mu[k,], nrow = count[k], ncol = p, byrow = TRUE)
-    # fill in indicies of ind of new_Sigma with covariance matricies for k
-    new_Sigma[,,ind] <- Sigma[,,k]
+    # only execute if there are class observations to avoid warnings
+    if (count[k] > 0) { 
+      new_mu[ind,] <- matrix(mu[k,], nrow = count[k], ncol = p, byrow = TRUE)
+      # fill in indicies of ind of new_Sigma with covariance matricies for k
+      new_Sigma[,,ind] <- Sigma[,,k]
+    }
   }
   
   # Checking the dimensions of y and new_Sigma
@@ -87,7 +93,7 @@ update_theta <- function(y, V, mu, Sigma, z) {
 #' ```
 #' where `theta_k` is the mean of all `theta_i`s where `z_i = k` and `N_k` is the number of `z_i = k` (sum of indicator `z_k = k`).
 #' 
-update_mu <- function(theta, currMu, Sigma, z) {
+update_mu <- function(theta, old_mu, Sigma, z) {
   # number of classes, K. number of features, q
   SigmaDim <- dim(Sigma)
   K <- SigmaDim[3]  # q x q x K
@@ -110,21 +116,26 @@ update_mu <- function(theta, currMu, Sigma, z) {
     # Class mean theta has rows of classMeanTheta filled with mean of class
     if (count > 1) { # more than one observation of class
       classMeanTheta[kk,] <- colMeans(theta[zInd,])
+      
+      # Calculating scaled Sigma, divided by count of kk in z
+      Sigma[,,kk] <- Sigma[,,kk]/count
     } else if (count == 1) { # only one observation of class
       classMeanTheta[kk,] <- theta[zInd,]
+      
+      # Calculating scaled Sigma, divided by count of kk in z
+      Sigma[,,kk] <- Sigma[,,kk]/count
     } else { # no observations of class
       classMeanTheta[kk,] <- rep(0, q) # fill in theta so that can sample
       replaceMu[kk] <- TRUE # boolean variable used after samplin to replace row
     }
     
-    # Calculating scaled Sigma, divided by count of kk in z
-    Sigma[,,kk] <- Sigma[,,kk]/count
+
   }
   
   Mu <- rmNorm(K, classMeanTheta, Sigma) # sample Mu
   
   # replace rows with no observations in that class with last row mean
-  Mu[replaceMu] <- currMu[replaceMu] 
+  Mu[replaceMu,] <- old_mu[replaceMu,] 
   
   return(Mu)
 }
@@ -149,51 +160,53 @@ update_mu <- function(theta, currMu, Sigma, z) {
 #' are met
 #' ```
 #' 
-update_Sigma <- function(y, theta, mu, z, Omega, vK) {
+update_Sigma <- function(y, theta, mu, old_Sigma, z, Omega, vK) {
   # iterate through classes and make a new mu to match theta
   dim_mu <- dim(mu) # dimensions of mu c(K, p)
   K <- dim_mu[1] # rows are K
   p <- dim_mu[2] # columns are p
   n <- nrow(theta) # rows are n, number of observations
   
-  expand_mu <- matrix(nrow = n, ncol = p) # allocate space for expanded mu
+  # allocate space before 
+  replaceSigma <- rep(FALSE, K) # indicator for if there are empty clusters
+  # initialized at false, will change if empty cluster if found
   count <- rep(NA, K) # allocate space for count of classes in z
-  for (k in 1:K) {
-    ind <- which(z == k) # indices of observations of class k
-    # calculate count, number of class observations in z
-    count[k] <- length(ind)
-    
-    # fill in expand_mu with each class mean from mu
-    expand_mu[ind,] <- matrix(mu[k,], nrow = count[k], ncol = p, byrow = TRUE)
-  }
-  # now the rows of theta and mu match so that the i-th row of mu is the mean
-  # for the i-th row of theta
-  
-  # residuals from theta and mus
-  res <- theta - expand_mu 
-  
-  # calculate Psi matrix
   Psi <- array(dim = c(p,p,K)) # allocate space for Psi matrix
-  # calculate Psi by outer product of each row of res an entry to the array
+  
   for (k in 1:K) {
-    k_inds <- which(z == k) # indicies of observations of class k
-    Psi[,,k] <- Omega[,,k] # initiate Psi_k to Omega_k
-    for (ii in 1:count[k]) { # iterate through all of the class observations
-      ind <- k_inds[ii] # ii-th index of class k
-      Psi[,,k] <- Psi[,,k] + tcrossprod(res[ind,]) # outer product
-      # tcrossprod(x) is x %*% t(x)
+    k_inds <- which(z == k) # indices of observations of class k
+    # calculate count, number of class observations in z
+    count[k] <- length(k_inds)
+    
+    # initiate Psi_k to Omega_k
+    Psi[,,k] <- Omega[,,k] 
+    
+    # check how many observations there are in class k
+    if (count[k] == 0) {
+      replaceSigma[k] <- TRUE # found empty cluster
+      print("cluster of 0")
+    } else { # cluster has at least one observation
+      for (ii in 1:count[k]) { # iterate through all of the class observations
+        ind <- k_inds[ii] # ii-th observation of class k
+        
+        # calculate residual of theta and mu
+        res <- theta[ind,] - mu[k,]
+        Psi[,,k] <- Psi[,,k] + tcrossprod(res) # outer product
+        # tcrossprod(x) is x %*% t(x)
+      }
+      # Psi_k is now the sum of outer products of the rows of res
     }
-    # Psi_k is now the sum of outer products of the rows of res
   }
   
   # calculate nu
   nu <- count + vK # a vector of length K
-  
   Sigma <- riwish(K, Psi, nu)
   
-  return(Sigma)
+  # replace empty cluster class Sigmas with the previous Sigma
+  Sigma[,,replaceSigma] <- old_Sigma[,,replaceSigma]
+  
+  return(Psi)
 }
-
 
 #' Samples cluster memberships probabilities from a Dirichlet distribution 
 #' 
@@ -216,7 +229,6 @@ update_rho <- function(theta, mu, Sigma, Z){
     alpha[k] <- sum(Z == k) + 1
   }
   
-  # Generate tau's 
   rho<-rdirichlet(1, alpha)
   return(rho)
 }
@@ -258,18 +270,14 @@ update_z <- function(theta, mu, Sigma, rho){
   # Compute the matrix of multinomial probabilties
   Lambda <- exp(Kappa)
   Lambda <- Lambda / rowSums(Lambda) 
-  Z <- numeric(length=N)
-  
-  # Keep re-sampling until at least one observation in each cluster
-  while(TRUE){
-    Z<- rcategorical(t(Lambda))
-    if (proper_sample(Z, K)) break 
-  }
+
+  Z <- rcategorical(t(Lambda))
   
   return(list(z=Z, Lambda=Lambda))
 }
 
 ###########################################################################################
+
 
 
 #' Performs Gibbs Sampling given desired number of clusters and data
@@ -353,6 +361,7 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
         } # end second if
       } # end first if
     } # end for
+    
   } else { # given inital parameters
     if ( (! "theta" %in% names(initParamVals) ) || (!"mu" %in% names(initParamVals)) ||  (!"Sigma" %in% names(initParamVals))
          ||  (!"rho" %in% names(initParamVals))||  (!"z" %in% names(initParamVals)))
@@ -403,7 +412,7 @@ gibbsSampler <- function(data, V, prior, initParamVals, K, burnin_period, numIte
     }
     if(!Sigma.fixed){
     # Update Sigma, a 'p x p x K' array of covariance matricies
-      new_Sigma <- update_Sigma(data, new_theta, new_mu, old_z, Omega, Vk)
+      new_Sigma <- update_Sigma(data, new_theta, new_mu, old_Sigma, old_z, Omega, Vk)
     }
     if(!rho.fixed){
     # Update rho, a K x 1 vector
