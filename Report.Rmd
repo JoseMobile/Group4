@@ -236,7 +236,7 @@ However, these possibilities are assuming that the model knows the true cluster 
 pairs(theta_hat)
 ```
 
-This pairs plot is much closer to the actual clustering problem where none of the true clustering behaviour is known. In all of the pairs plots, there does not seem to be any unique pairwise relationship between the predictors. In all of the plots, the pariwise relationship seems to be constant and there seems to be no visual indicators as to the existence of different clusters. 
+This pairs plot is much closer to the actual clustering problem where none of the true clustering behaviour is known. In all of the pairs plots, there does not seem to be any unique pairwise relationship between the predictors. Many of the pairwise plots simply look like round black blobs which will likely make it difficult to achieve a good classification accuracy. 
 
 Despite this, we will see what clusters are determined by the gibbs sampler, and if they match the clusters determined by hbe weight percentage.
 
