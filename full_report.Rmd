@@ -201,6 +201,7 @@ p <- length(hbe_fit[[1]]$coef)
 # Extract data 
 wts <- vector(length=N)
 theta_hat <- matrix(nrow=N, ncol=p)
+colnames(theta_hat) <- names(hbe_fit[[1]]$coef)
 obs_info <- array(dim=c(p, p, N))
 for (i in 1:N){
   theta_hat[i, ] <- hbe_fit[[i]]$coef
