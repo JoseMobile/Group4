@@ -182,7 +182,7 @@ update_Sigma <- function(y, theta, mu, old_Sigma, z, Omega, vK) {
     Psi[,,k] <- Omega[,,k] 
     
     # check how many observations there are in class k
-    if (count[k] == 0) {git s
+    if (count[k] == 0) {
       replaceSigma[k] <- TRUE # found empty cluster
       print("cluster of 0")
     } else { # cluster has at least one observation
