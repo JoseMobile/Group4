@@ -1,4 +1,8 @@
-# Abstract
+# A Bayesian Alternative to Hierarchal Clustering 
+
+# Authors: Thomas Yan, Mark Christopher Uy, Gregory Reid, Jose Carlos Dairo
+
+## Abstract
 
 A common problem in many analyses is determining how to group data, which observations belong to which group and how many groups are appropriate. In these problems, often the true grouping and group memberships of each observation are unknown and the data for that is simply unavailable. This is the reason why clustering methods are required to solve these sorts of problems, by creating groups using similarities between observations. An example of such a problem is trying to determine the number of sub-species of an animal in a habitat when the sub-species can not be easily distinguished visually. 
 
@@ -7,10 +11,7 @@ One method of clustering is using Bayesian inference to estimate the posterior p
 This report's goal is to create a Markov Chain Monte Carlo (MCMC) method, specifically using a Gibbs Sampler approach, to perform clustering on data with unknown responses by estimating a posterior distribution for the class memberships. By using MCMC instead of just Monte Carlo methods, this approach is able to work in more problems and is able to estimate posterior probabilities in situations where Monte Carlo methods would not be possible. 
 
 
-
-(didn't address challenges, problems and other approaches a lot, maybe refer to these topics in more detail in the introduction)
-
-# Introduction 
+## Introduction 
 
 When trying to group data where the true group memberships, if they exist, are unknown, then methods used to perform this task fall under the umbrella term, clustering, which itself is a subset of unsupervised machine learning (B. Zhang, 2003). There are already many well known methods of clustering which are widely used and effective in many contexts. These include, k-means clustering, mean-shift clustering, density-based clustering and heirarchal clustering. However, a prominent drawback for these methods is that they are heuristic and thus have no way of drawing formal inferences from their results (K. M. A. Patel and P. Thakral, 2016). 
 
@@ -18,13 +19,8 @@ When we elect to use model-based clustering, it is possible to draw interpretati
 
 As dimensionality and data size increases, the computational time needed to perform EM increases immensely. Neal and Hitton introduced a way to speed up the EM algorithm by recalculating the distribution for only one unobserved variable at each expectation step as opposed to calculating for all unobserved variables (R.M. Neal and Hinton, 1998). Bradley et al. proposed an implementaion of the EM Algorithm that was scalable to large databases with limited memory buffers (Bradley et al., 1998). While these solutions focused on improving the EM algorithm for specific cases, our paper is focused on developing an approach which does not involve any EM algorithm. We propose a solution that uses an exclusively bayesian approach by implementing a Gibb's sampler to estimate the parameters of our model as well as estimate the cluster memberships of our observations. The following sections will showcase what assumptions were made to make the simplify the problem enough to be able to use of a gibb's sampler, its performance on a real data set and lastly a discussion on the merits and flaws of our proposed solution.  
 
-# Methodology 
+## Methodology 
 
-(Left out some details such as log-likelihood simplifications and details of the prior and how to choose Omega and Nu)
-
-(Also didn't include details as to how we drew things, like in rho update, says to draw from Gamma distribution to get Dirichlet)
-
-(Should we add more details in appendix and reference it? )
 
 The first assumption this method makes is that the observed data follows a mixture normal distribution, $x_i \sim \sum_{k=1}^K \rho_k N(\mu_k, \Sigma_k), i = 1, ..., N$ and are independent and identically distributed. Then following this, we take a Bayesian inference approach where the unknown, but true cluster memberships follows a multinomial distribution, $z_i \sim \text{Multinomial}(K, \rho)$ where $\rho = (\rho_1, ..., \rho_K)$ and $(N_1, ..., N_k) \sim \text{Multinomial}(N, \rho)$. However, a problem with this is that it quickly suffers from the curse of dimensionality as the dimension of $x_i$ increases and causes this mixture-normal model to fail. 
 
@@ -106,9 +102,35 @@ And each of these variables are conditionally independent, which allows us to sa
 
 Then we can estimate the posterior probability by $P(z_i = k|Y) \approx \hat{\lambda}_{ik}$ where $\hat{\lambda}_{ik} = [\hat{\Lambda}]_{ik}, \hat{\Lambda} = \frac{1}{M} \sum_{m=1}^M \Lambda^{(m)}$. Where $\Lambda^{(m)}$ is the $\Lambda$ matrix created in the mth iteration used to sample z. 
 
-# Results 
+## Results 
 
-```{r}
+```{r echo=FALSE}
+init_z <- function(y, K, max_iter = 10, nstart = 10) {
+  # init++
+  N <- nrow(y)
+  p <- ncol(y)
+  x <- t(y) # easier to use columns
+  centers <- matrix(NA, p, K) # centers
+  icenters <- rep(NA, K-1) # indices of centers
+  minD <- rep(Inf, N) # current minimum distance vector
+  # initialize
+  icenters[1] <- sample(N,1)
+  centers[,1] <- x[,icenters[1]]
+  for(ii in 1:(K-1)) {
+    D <- colSums((x - centers[,ii])^2) # new distance
+    minD <- pmin(minD, D)
+    icenters[ii+1] <- sample(N, 1, prob = minD)
+    centers[,ii+1] <- x[,icenters[ii+1]]
+  }
+  centers <- t(centers)
+  colnames(centers) <- rownames(x)
+  # run kmeans with these centers
+  km <- kmeans(x = y, centers = centers, nstart = nstart, iter.max = max_iter)
+  km$cluster
+}
+```
+
+```{r echo=FALSE}
 set.seed(440)
 source("gibbs-wrapper.R")
 require("plot3D")
@@ -118,7 +140,7 @@ require("plot3D")
 To demonstrate that the gibbs sampler can detect distinguishable clusters, we simulated numerical data such that the clusters are clear separated from each other.
 
 
-```{r}
+```{r echo=FALSE}
 #--------------------------------------------
 # generate simulated data
 # -------------------------------------------
@@ -143,7 +165,7 @@ plot(x=sim_data[,1],y=sim_data[,2], main = "simulated data")
 
 Now we use the proposed Gibbs Sampler to determine the three clusters in this dataset.
 
-```{r}
+```{r echo=FALSE, results="hide"}
 # fit gibbs sampler
 gibbs_fit2 <- gibbsSampler(data=sim_data, V=sim_obs_info, burnin_period=1e2, numIter=1e3, K=3, Theta.out=FALSE, z.out=FALSE)
 # get estimated cluster affiliation from gibbs sampler
@@ -172,13 +194,14 @@ In this particular dataset, all observations had weight percentage of hbe as 1.5
 
 We will see the gibbs sampler can the group the observations into 6 clusters and see if each cluster corresponds to a particular weight percentage of hbe.
 
-```{r}
+```{r echo=FALSE}
 hbe_fit <- readRDS("hbe-fbm_fit_v1.rds")
 N <- length(hbe_fit)
 p <- length(hbe_fit[[1]]$coef)
 # Extract data 
 wts <- vector(length=N)
 theta_hat <- matrix(nrow=N, ncol=p)
+colnames(theta_hat) <- names(hbe_fit[[1]]$coef) 
 obs_info <- array(dim=c(p, p, N))
 for (i in 1:N){
   theta_hat[i, ] <- hbe_fit[[i]]$coef
@@ -232,7 +255,7 @@ For kappa, there looks to be potential to do some basic clustering, where kappa 
 However, these possibilities are assuming that the model knows the true cluster memberships. The Gibbs sampler we created is for a clustering method, which means that the true cluster label is unknown. Thus, ignoring the first column and first row of the pairs plot and removing the colouring indicating the true clusters, we can look at a new pairs plot. 
 
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, echo=FALSE}
 pairs(theta_hat)
 ```
 
@@ -246,7 +269,7 @@ Despite this, we will see what clusters are determined by the gibbs sampler, and
 gibbs_fit <- gibbsSampler(data=theta_hat, V=obs_info, burnin_period=1e3, numIter=1e4, K=6, Theta.out=FALSE, z.out=FALSE)
 ```
 
-```{r}
+```{r echo=FALSE}
 # get estimated cluster affiliation from gibbs sampler
 fitted_clusters <- numeric(length=N)
 for (i in 1:N){
@@ -261,7 +284,22 @@ With an error rate of over 95% it is clear that the gibbs sampler did not pick o
 
 As a comparison, we will see if the kmeans plus plus (km++) algorithm performs better. 
 
-```{r}
+As a brief overview of this algorithm is as follows:
+
+Step 1: Choose one center uniformly at random from among the data points.
+
+Step 2: For each data point $x$, $d(x)$, the distance between x and the nearest center that has already been chosen.
+
+Step 3: Choose one new data point at random as a new center, using a weighted probability distribution where a point $x$ is chosen with probability proportional to $d(x)^2$.
+
+
+Step 4: Repeat Steps 2 and 3 until $k$ centers have been chosen.
+
+Step 5: With the initial centers have been chosen, proceed using the regular k-means clustering.
+
+(Arthur D., 2007)
+
+```{r echo=FALSE}
 # clustering real data with kmeans++ algorithm
 # note since kmeans starts with random centroids, individual kmeans can have different results.
 # We will conduct many kmeans and aggregate the results
@@ -324,7 +362,7 @@ While the km++ algorithm performed better than the gibbs sampler, it still had a
 
 It is possible that this is caused by the data being unscaled. Thus, we carry out the same test but the data has been standardized so that mean of the data is 0 and the variance is 1.
 
-```{r}
+```{r echo=FALSE, results="hide"}
 #-----------------------------------------------------------------------------------------------------------
 # testing with standardized data (data centered at 0 with sd of 1)
 #-----------------------------------------------------------------------------------------------------------
@@ -333,7 +371,7 @@ theta_hat_scaled <- scale(theta_hat)
 gibbs_fit1 <- gibbsSampler(data=theta_hat_scaled, V=obs_info, burnin_period=1e3, numIter=1e4, K=6, Theta.out=FALSE, z.out=FALSE)
 ```
 
-```{r}
+```{r echo=FALSE}
 # get estimated cluster affiliation from gibbs sampler
 fitted_clusters2 <- numeric(length=N)
 for (i in 1:N){
@@ -346,7 +384,7 @@ print(paste0("Percentage of estimated cluster memberships that do not match true
 
 The performance of the gibbs sampler improved with the error rate decreasing to 77% but is still poor.
 
-```{r}
+```{r echo=FALSE}
 max_iters <- 10000
 kmeans_results1 <- matrix(nrow = N,ncol = max_iters)
 # get results from max_iters kmeans
@@ -369,7 +407,7 @@ Even with scaled data, both clustering algorithms did not implicitly distinguish
 
 Here are the clusters determined the gibbs sampler on scaled data.
 
-```{r}
+```{r echo=FALSE}
 gibb_cols <- fitted_clusters2
 # assigning colours to each cluster
 gibb_cols[gibb_cols == 1] = "red"
@@ -402,4 +440,218 @@ However, as with all Bayesian analysis, our method requires arbitrarily selected
 To showcase our method, we applied it onto the hbe dataset and compared it against k-means plus plus algorithm. The goal of this application is to see if the data can be clustered in such a way that each cluster corresponds to observations with a particular weight percentage. Through the results of both methods, we discovered that observations in the data could not be easily grouped into clusters distinguished by a particular weight percentage variable. This application does not assert the effectiveness of our proposed method or lack thereof.
 
 With that said, we outline one potential direction for research. One particular research direction would be construct similar clustering methods with different gibbs samplers that have different prior distributions and compare the performances against each other. The goal of this research would not be to determine which gibbs sampler method works best, but rather to discover what would be the most appropriate gibbs sampler for particular situations and document them. 
+
+
+
+# Appendix
+
+```{r eval = FALSE}
+hbe_fit <- readRDS("hbe-fbm_fit_v1.rds")
+N <- length(hbe_fit)
+p <- length(hbe_fit[[1]]$coef)
+# Extract data 
+wts <- vector(length=N)
+theta_hat <- matrix(nrow=N, ncol=p)
+colnames(theta_hat) <- names(hbe_fit[[1]]$coef)
+obs_info <- array(dim=c(p, p, N))
+for (i in 1:N){
+  theta_hat[i, ] <- hbe_fit[[i]]$coef
+  wts[i] <- hbe_fit[[i]]$wt
+  obs_info[, , i] <- hbe_fit[[i]]$vcov
+}
+# Transform the wts into numeric labels
+lab <- unique(wts) 
+K <- length(lab)
+cluster <- numeric(length=N)
+for (i in 1:N){
+  if (wts[i] == lab[1]){
+    cluster[i] <- 1
+  }
+  else if (wts[i] == lab[2]){
+    cluster[i] <- 2
+  }
+  else if (wts[i] == lab[3]){
+    cluster[i] <- 3
+  }
+  else if (wts[i] == lab[4]){
+    cluster[i] <- 4
+  }
+  else if (wts[i] == lab[5]){
+    cluster[i] <- 5
+  }
+  else{
+    cluster[i] <- 6
+  }
+}
+# getting true cluster affiliations
+real_N_k <- numeric(length=K)
+real_cols <- rep(NA,N) # colors for true cluster affiliations
+for (k in 1:K){
+  real_N_k[k] <- sum(cluster == k)
+}
+# assigning colours to each cluster
+real_cols[cluster == 1] = "red"
+real_cols[cluster == 2] = "blue"
+real_cols[cluster == 3] = "green"
+real_cols[cluster == 4] = "orange"
+real_cols[cluster == 5] = "black"
+real_cols[cluster == 6] = "pink"
+pairs(theta_hat,col=real_cols, main="pairs plot") # pairs plot
+```
+
+
+
+```{r, fig.width=7, fig.height=5, eval=FALSE}
+pairs(theta_hat)
+```
+
+
+```{r results="hide", eval=FALSE}
+# fit gibbs sampler
+gibbs_fit <- gibbsSampler(data=theta_hat, V=obs_info, burnin_period=1e3, numIter=1e4, K=6, Theta.out=FALSE, z.out=FALSE)
+```
+
+```{r, eval=FALSE}
+# get estimated cluster affiliation from gibbs sampler
+fitted_clusters <- numeric(length=N)
+for (i in 1:N){
+  fitted_clusters[i] <- which.max(gibbs_fit$Lambda[i, ])
+}
+# error rate
+err <-  sum(cluster != fitted_clusters)/ N
+print(paste0("Percentage of estimated cluster memberships that do not match true cluster memberships: ", round(err,5)))
+```
+
+
+```{r, eval=FALSE}
+# clustering real data with kmeans++ algorithm
+# note since kmeans starts with random centroids, individual kmeans can have different results.
+# We will conduct many kmeans and aggregate the results
+#' Initial cluster allocation.
+#'
+#' Initializes the clusters using the kmeans++ algorithm of Arthur & Vassilvitskii (2007).
+#'
+#' @param y An `N x p` matrix of observations, each of which is a column.
+#' @param K Number of clusters (positive integer).
+#' @param max_iter The maximum number of steps in the [stats::kmeans()] algorithm.
+#' @param nstart The number of random starts in the [stats::kmeans()] algorithm.
+#'
+#' @return A vector of length `N` consisting of integers between `1` and `K` specifying an initial clustering of the observations.
+#' @author Martin Lysy
+#' @references Arthur, D., Vassilvitskii, S. "k-means++: the advantages of careful seeding" *Proceedings of the 18th Annual ACM-SIAM Symposium on Discrete Algorithms.* (2007): 1027–1035. <http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf>.
+init_z <- function(y, K, max_iter = 10, nstart = 10) {
+  # init++
+  N <- nrow(y)
+  p <- ncol(y)
+  x <- t(y) # easier to use columns
+  centers <- matrix(NA, p, K) # centers
+  icenters <- rep(NA, K-1) # indices of centers
+  minD <- rep(Inf, N) # current minimum distance vector
+  # initialize
+  icenters[1] <- sample(N,1)
+  centers[,1] <- x[,icenters[1]]
+  for(ii in 1:(K-1)) {
+    D <- colSums((x - centers[,ii])^2) # new distance
+    minD <- pmin(minD, D)
+    icenters[ii+1] <- sample(N, 1, prob = minD)
+    centers[,ii+1] <- x[,icenters[ii+1]]
+  }
+  centers <- t(centers)
+  colnames(centers) <- rownames(x)
+  # run kmeans with these centers
+  km <- kmeans(x = y, centers = centers, nstart = nstart, iter.max = max_iter)
+  km$cluster
+}
+max_iters <- 10000  # set number of kmeans to run
+kmeans_results <- matrix(nrow = N,ncol = max_iters) # pre-allocate matrix
+# simple function to calculate the mode in vector of numbers
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+# get results from max_iters kmeans
+for (iter in 1:max_iters){
+  kmeans_results[,iter] <- init_z(y = theta_hat,K = 6)
+}
+fitted_clusters1 <- matrix(nrow = N,ncol = 1) # pre-allocate matrix to store estimated clusters
+# the mode cluster membership for each observation becomes the estimate cluster membership
+for (row in 1:N){
+  fitted_clusters1[row,] <- Mode(kmeans_results[row,])
+}
+err1 <- sum(cluster != fitted_clusters1) / N
+print(paste0("Percentage of estimated cluster memberships that do not match true cluster memberships: ", round(err1,5)))
+```
+
+
+```{r eval= FALSE}
+#-----------------------------------------------------------------------------------------------------------
+# testing with standardized data (data centered at 0 with sd of 1)
+#-----------------------------------------------------------------------------------------------------------
+theta_hat_scaled <- scale(theta_hat)
+# fit gibbs sampler
+gibbs_fit1 <- gibbsSampler(data=theta_hat_scaled, V=obs_info, burnin_period=1e3, numIter=1e4, K=6, Theta.out=FALSE, z.out=FALSE)
+```
+
+```{r eval = FALSE}
+# get estimated cluster affiliation from gibbs sampler
+fitted_clusters2 <- numeric(length=N)
+for (i in 1:N){
+  fitted_clusters2[i] <- which.max(gibbs_fit1$Lambda[i, ])
+}
+# error rate
+err2 <- sum(cluster != fitted_clusters2) / N
+print(paste0("Percentage of estimated cluster memberships that do not match true cluster memberships: ",round(err2,5)))
+```
+
+
+```{r eval=FALSE}
+max_iters <- 10000
+kmeans_results1 <- matrix(nrow = N,ncol = max_iters)
+# get results from max_iters kmeans
+for (iter in 1:max_iters){
+  kmeans_results1[,iter] <- init_z(y = theta_hat_scaled,K = 6)
+}
+fitted_clusters3 <- matrix(nrow = N,ncol = 1) # pre-allocate matrix
+# the mode cluster membership for each observation becomes the estimate cluster membership
+for (row in 1:N){
+  fitted_clusters3[row,] <- Mode(kmeans_results1[row,])
+}
+err3 <- sum(cluster != fitted_clusters3) / N
+print(paste0("Percentage of estimated cluster memberships that do not match true cluster memberships: ",round(err3,5)))
+```
+
+```{r eval=FALSE}
+gibb_cols <- fitted_clusters2
+# assigning colours to each cluster
+gibb_cols[gibb_cols == 1] = "red"
+gibb_cols[gibb_cols == 2] = "blue"
+gibb_cols[gibb_cols == 3] = "green"
+gibb_cols[gibb_cols == 4] = "orange"
+gibb_cols[gibb_cols == 5] = "black"
+gibb_cols[gibb_cols == 6] = "pink"
+pairs(theta_hat,col=gibb_cols, main="pairs plot") # pairs plot
+```
+
+
+# References
+
+Charles Bouveyron, Camille Brunet. Model-Based Clustering of High-Dimensional Data: A review. Computational Statistics and Data Analysis, Elsevier, 2013, 71, pp.52-78. ff10.1016/j.csda.2012.12.008ff. ffhal-00750909f
+
+K. M. A. Patel and P. Thakral, "The best clustering algorithms in data mining," 2016 International Conference on Communication and Signal Processing (ICCSP), Melmaruvathur, 2016, pp. 2042-2046.
+
+A. Samé, "Grouped data clustering using a fast mixture-model-based algorithm," 2009 IEEE International Conference on Systems, Man and Cybernetics, San Antonio, TX, 2009, pp. 2276-2280.
+
+R.M. Neal and Hinton, A view of the EM algorithm that justifies incremental, sparse and other variants. In M.I. Jordan, editor, Learning in Graphical Models, 355-368, Kluwer, Dordrecht, 1998
+
+P.S. Bradley, M.U. Fayyad and C.A. Reina, Scaling EM (Expectation Maximization) clustering to large databases. Technical Repport MSRTR-98-35, Microsoft Research, 1998.
+
+B. Zhang, "Comparison of the Performance of Center-Based Clustering Algorithms", Advances in Knowledge Discovery and Data Mining, Lecture Notes in Computer Science, Volume 2637/2003, pp. 569, 2003.
+
+Hill, D.B., Vasquez, P.A., Mellnik, J., McKinley, S.A., Vose, A., Mu, F., Henderson, A.G.,
+Donaldson, S.H., Alexis, N.E., Boucher, R.C., and Forest, M.G. (2014).  “A biophysical
+basis for mucus solids concentration as a candidate biomarker for airways disease.”
+PLoS ONE
+, 9(2): e87681
+
+Arthur, D. & Vassilvitskii, S. (2007). k-means++: the advantages of careful seeding.. In N. Bansal, K. Pruhs & C. Stein (eds.), SODA (p./pp. 1027-1035), : SIAM. ISBN: 978-0-898716-24-5
 
