@@ -1,0 +1,25 @@
+Package: MMcluster
+Title: Mixed-Model Clustering with a Gibbs Sampler
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Gregory", "Reid", email = "gj3reid@edu.uwaterloo.ca",
+               role = c("aut", "cre")),
+    person("Jose Carlos", "Dairo", email = "jcfdairo@edu.uwaterloo.ca",
+               role = "aut"),
+    person("Thomas", "Yan", email = "tsyan@edu.uwaterloo.ca",
+               role = "aut"),
+    person("Mark Christopher", "Uy", email = "mark.uy@edu.uwaterloo.ca",
+               role = "aut"))
+Description: Performs mixture model clustering using a Gibbs sampler by assuming the data follows a random effects mixture model.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.0
+Imports:
+    mniw,
+    stats
+Suggests: 
+    testthat
+Depends: 
+    R (>= 3.6)

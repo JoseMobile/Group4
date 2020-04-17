@@ -1,0 +1,17 @@
+#' Human Bronchial Epithelial Data
+#'
+#' A dataset including the weight percent solids and 6 covariates for human mucus.
+#'
+#' @format A data frame with 668 rows and 7 variables.
+#' \describe{
+#'   \item{kappa}{real number}
+#'   \item{mu1}{real number}
+#'   \item{mu2}{real number}
+#'   \item{logD}{real number}
+#'   \item{lambda}{real number}
+#'   \item{nu}{real number}
+#'   \item{wts}{Weight percent solids, 1p5 means 1.5 and 2p5 means 2.5}
+#' }
+#'
+#' @source Hill, David B et al. “A biophysical basis for mucus solids concentration as a candidate biomarker for airways disease.” PloS one vol. 9,2 e87681. 18 Feb. 2014, doi:10.1371/journal.pone.0087681
+"hbe"
