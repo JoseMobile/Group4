@@ -5,15 +5,11 @@
 \alias{hbe}
 \title{Human Bronchial Epithelial Data}
 \format{
-A data frame with 668 rows and 7 variables.
+A list containing 668 observations of HBE data with each element another list of 3 elements.
 \describe{
-\item{kappa}{real number}
-\item{mu1}{real number}
-\item{mu2}{real number}
-\item{logD}{real number}
-\item{lambda}{real number}
-\item{nu}{real number}
-\item{wts}{Weight percent solids, 1p5 means 1.5 and 2p5 means 2.5}
+\item{coef}{numerical, 6 covariates collected on the mucus}
+\item{wts}{numerical, Weight percent solids, 1p5 means 1.5 and 2p5 means 2.5}
+\item{vcov}{matrix, covariance matrix of the 6 covariates}
 }
 }
 \source{
@@ -23,6 +19,6 @@ Hill, David B et al. “A biophysical basis for mucus solids concentration as a 
 hbe
 }
 \description{
-A dataset including the weight percent solids and 6 covariates for human mucus.
+A dataset including the weight percent solids, 6 covariates, and Fisher information matricies for human mucus.
 }
 \keyword{datasets}

@@ -134,6 +134,11 @@ MMcluster <- function(data, V, prior, initParamVals, K, burnin_period, numIter, 
   # Parameters orders should all be: theta, mu, Sigma, rho, z
   #   If not check the function calls and standardize them
   for (m in 1:(burnin_period +numIter)){
+    # output iteration number every 200 runs
+    if (m %% 200 == 0) {
+      cat("Iteration # ", m, "\n")
+    }
+
     # Call the update functions
 
     if (!theta.fixed){
