@@ -1,3 +1,8 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
 # A Bayesian Alternative to Hierarchal Clustering 
 
 ## Authors: Thomas Yan, Mark Christopher Uy, Gregory Reid, Jose Carlos Dairo
@@ -130,10 +135,10 @@ init_z <- function(y, K, max_iter = 10, nstart = 10) {
 }
 ```
 
-```{r echo=FALSE, cache=TRUE}
+```{r echo=FALSE, results="hide", cache=TRUE}
 set.seed(440)
 source("gibbs-wrapper.R")
-require("plot3D")
+require(rstan)
 # install.packages("plot3D") # sometimes require() does not install the plot3D package, if so, run this line
 ```
 
@@ -191,7 +196,7 @@ Now we use the proposed Gibbs Sampler to determine the three clusters in this da
 
 In reality, it is often difficult to determine if there are distinct clusters in the dataset. If the data has many dimensions, it is very difficult to visually determine if there are distinct clusters, as was the case with the data simulated earlier. 
 
-A real dataset that we will use in this case is dataset used by researchers trying to model microparticle trajectories with a linear drift fractional Brownian motion model (Hill et al., 2016).
+A real dataset that we will use in this case is dataset used by researchers trying to model microparticle trajectories with a linear drift fractional Brownian motion model (Hill et al., 2014).
 
 This dataset contains the parameter estimates to the trajectories of 668 microparticles, their weight percentage of human bronchial epithelial (hbe) mucosal fluid, and their observed fisher information matrices. 
 
@@ -269,9 +274,9 @@ This pairs plot, without coloring, showcases the clustering problem where there 
 
 Despite this, we will see what clusters are determined by the gibbs sampler, and if they match the clusters determined by hbe weight percentage. 
 
-As a comparison, we will see if the kmeans plus plus (km++) algorithm performs better. 
+As a comparison, we also include an RStan based implementation of the above model, and kmeans plus plus (km++) algorithm to see if any of these 2 other methods perform better. 
 
-As a brief overview of this algorithm is as follows:
+A brief overview of of the km++ algorithm is as follows:
 
 Step 1: Choose one center uniformly at random from among the data points.
 
@@ -286,7 +291,7 @@ Step 5: With the initial centers have been chosen, continue using the regular k-
 
 (Arthur D., 2007)
 
-```{r echo=TRUE, results="hide",cache=TRUE}
+```{r echo=FALSE, results="hide",cache=TRUE}
 # fit gibbs sampler
 gibbs_fit <- gibbsSampler(data=theta_hat, V=obs_info, burnin_period=1e3, numIter=1e4, K=6, Theta.out=FALSE, z.out=FALSE)
 
@@ -295,7 +300,6 @@ fitted_clusters <- numeric(length=N)
 for (i in 1:N){
   fitted_clusters[i] <- which.max(gibbs_fit$Lambda[i, ])
 }
-
 
 # clustering real data with kmeans++ algorithm
 # note since kmeans starts with random centroids, individual kmeans can have different results.
@@ -351,6 +355,67 @@ fitted_clusters1 <- matrix(nrow = N,ncol = 1) # pre-allocate matrix to store est
 for (row in 1:N){
   fitted_clusters1[row,] <- Mode(kmeans_results[row,])
 }
+
+
+############################################################# Stan 
+
+finMixData_fit<- readRDS("fitMixDataStan.rds")
+
+extract_rho<- extract(finMixData_fit)$rho
+extract_theta<-  extract(finMixData_fit)$theta
+extract_mu<-  extract(finMixData_fit)$mu
+extract_sigma<-  extract(finMixData_fit)$sigma
+
+
+numIter<- 24000
+Lambda<-matrix(0, nrow =N, ncol=K)
+
+for ( i in 1:numIter){
+  cur_rho<- extract_rho[i,]
+  cur_mu<- extract_mu[i, ,]
+  cur_theta<- extract_theta[i, ,]
+  cur_sigma<- extract_sigma[i, , ,]
+  K<-length(cur_rho)
+  Kappa<-matrix(0, nrow=N, ncol=K)
+  inv_sigma <- vector("list", length=K)
+  
+  for (k in 1:K){
+    inv_sigma[[k]] <- solveV(cur_sigma[k,,], ldV=TRUE)
+  }
+  
+  log_det <- sapply(inv_sigma, FUN=function(z){ z$ldV })
+  log_rho <- log(cur_rho)
+  
+  for (j in 1:N){
+    for (k in 1:K){
+      temp <- as.matrix(cur_theta[j, ] - cur_mu[k, ])
+      Kappa[j, k] <- log_rho[k] - (t(temp) %*% inv_sigma[[k]]$y %*% temp + log_det[k]) / 2
+    }
+  }
+    
+  cur_Lambda<- exp(Kappa)
+  
+  if ( sum(is.nan(cur_Lambda)) > 0){
+    print("NaN found.")
+    stop() 
+  }
+  
+  cur_Lambda <- cur_Lambda / rowSums(cur_Lambda)
+  
+  Lambda <- Lambda + cur_Lambda
+  
+  #if(mod(i,120) == 0) print(i)
+}
+
+Lambda <- Lambda/ numIter
+
+fitted_clustersRSTAN <- numeric(length=N)
+for (i in 1:N){
+  fitted_clustersRSTAN[i] <- which.max(Lambda[i, ])
+}
+
+############################################################################
+real_rstan_cols <- rep(NA,N)
 real_gibbs_cols <- rep(NA,N)
 real_kmpp_cols <- rep(NA,N)
 # assigning colours to each cluster
@@ -368,26 +433,50 @@ real_kmpp_cols[fitted_clusters1 == 4] = "orange"
 real_kmpp_cols[fitted_clusters1 == 5] = "black"
 real_kmpp_cols[fitted_clusters1 == 6] = "purple"
 
+real_rstan_cols[fitted_clustersRSTAN == 1] = "red"
+real_rstan_cols[fitted_clustersRSTAN == 2] = "blue"
+real_rstan_cols[fitted_clustersRSTAN == 3] = "green"
+real_rstan_cols[fitted_clustersRSTAN == 4] = "orange"
+real_rstan_cols[fitted_clustersRSTAN == 5] = "black"
+real_rstan_cols[fitted_clustersRSTAN == 6] = "purple"
+```
+
+```{r, echo=FALSE, cache=TRUE, fig.width=7, fig.height=4}
 # plot side-by-side pairs plots
-par(mfrow=c(1,2))
 pairs(x = theta_hat,col = real_gibbs_cols, main = "Clusters determined by gibbs")
+```
+
+```{r, echo=FALSE, cache=TRUE, fig.width=7, fig.height=4}
+# plot side-by-side pairs plots
 pairs(x = theta_hat,col = real_kmpp_cols, main = "clusters determined by kmpp")
-par(mfrow=c(1,1))
+```
+
+```{r, echo=FALSE, cache=TRUE, fig.width=7, fig.height=4}
+# plot side-by-side pairs plots
+pairs(x = theta_hat,col = real_rstan_cols, main = "clusters determined by RStan")
+```
+
+```{r, echo=FALSE, cache=TRUE}
 
 print("Distribution of cluster memberships determined by Gibbs Sampler")
-table(fitted_clusters)
+print(table(fitted_clusters))
 print("Distribution of cluster memberships determined by K-means++")
-table(fitted_clusters1)
+print(table(fitted_clusters1))
+print("Distribution of cluster memberships determined by RStan Hamiltonian Based Model")
+print(table(fitted_clustersRSTAN))
 ```
 
 
-As expected, the clusters determined by the both algorithms overlap each other heavily.
+As expected, the clusters determined by all 3 algorithms overlap each other heavily.
 
-It is difficult to assess if the gibbs sampler or the km++ fit the data well, because there is no true cluster affiliation to evaluate against. Additionally, the data with the given variables cannot clearly by group up into distinguishable groups.  
+Due to this, it is difficult to assess if the gibbs sampler, RStan sampler or the km++ fit the data well, because there is no true cluster affiliation to evaluate against. Additionally, the data with the given variables cannot clearly be subdivided into distinguishable groups. 
 
-Overall, this suggests that given the existing parameters, observations with particular hbe weight percentages are not very distinguishable from other observations with different hbe weight percentages.
+However, it is rather clear that km++ performs the worst since their pairs plot is heavily dominated by the 2nd class (Blue Color) even to the extent that 2 disjoints parts of the data are labelled as part of the same class. In contrast our Gibbs sampler, and the RStan stampler show much more distinct group clusters, which more closely matches the ground truth groups. Despite the similar performance between the 2 samplers, the sampling time required by the gibbs sampler was an order of magnitude less than the time needed by the RStan sampler. This is one clear advantage of our new proposed implementation. 
+
+Overall, the results from all 3 clustering methods suggest that given the existing parameters, observations with particular hbe weight percentages are not very distinguishable from other observations with different hbe weight percentages.
 
 This does not rule out the possibility that hbe weight percentages or other variables can be used to group up microparticle trajectories, but for this to occur, latent variables would need be made known.
+
 
 # Discussion
 
@@ -399,11 +488,14 @@ The main benefit to this is that our Gibbs Sampler method is computationally che
 
 However, as with all Bayesian analysis, our method requires arbitrarily selected prior distributions to begin. This makes any analysis done with this approach subjective.
 
-To showcase our method, we applied it onto the hbe dataset and compared it against k-means plus plus algorithm. The goal of this application is to see if the data can be clustered in such a way that each cluster corresponds to observations with a particular weight percentage. Through the results of both methods, we discovered that observations in the data could not be easily grouped into clusters distinguished by a particular weight percentage variable. This application does not assert the effectiveness of our proposed method or lack thereof.
+To showcase our method, we applied it onto the hbe dataset and compared it against k-means plus plus algorithm and also an RStan Implementation of the same. The goal of this application is to see if the data can be clustered in such a way that each cluster corresponds to observations with a particular weight percentage. Through the results of both methods, we discovered that observations in the data could not be easily grouped into clusters distinguished by a particular weight percentage variable. This application does not assert the effectiveness of our proposed method or lack thereof.
 
 With that said, we outline one potential direction for research. One particular research direction would be construct similar clustering methods with different gibbs samplers that have different prior distributions and compare the performances against each other. The goal of this research would not be to determine which gibbs sampler method works best, but rather to discover what would be the most appropriate gibbs sampler for particular situations and document them. 
 
 
+```{r, echo=FALSE, results='asis'}
+cat("\n\n\\pagebreak\n")
+```
 
 # Appendix
 
@@ -437,7 +529,7 @@ init_z <- function(y, K, max_iter = 10, nstart = 10) {
 ```{r eval=FALSE,cache=TRUE}
 set.seed(440)
 source("gibbs-wrapper.R")
-require("plot3D")
+require(rstan)
 # install.packages("plot3D") # sometimes require() does not install the plot3D package, if so, run this line
 ```
 
@@ -546,7 +638,7 @@ pairs(theta_hat,col=real_cols, main="pairs plot clustered by wt") # pairs plot
 ```
 
 
-```{r, fig.width=7, fig.height=5, echo=FALSE, cache=TRUE}
+```{r, eval=FALSE, fig.width=7, fig.height=5, echo=FALSE, cache=TRUE}
 pairs(theta_hat)
 ```
 
@@ -616,6 +708,66 @@ fitted_clusters1 <- matrix(nrow = N,ncol = 1) # pre-allocate matrix to store est
 for (row in 1:N){
   fitted_clusters1[row,] <- Mode(kmeans_results[row,])
 }
+
+############################################################# 
+#                     Stan 
+
+finMixData_fit<- readRDS("fitMixDataStan.rds")
+
+extract_rho<- extract(finMixData_fit)$rho
+extract_theta<-  extract(finMixData_fit)$theta
+extract_mu<-  extract(finMixData_fit)$mu
+extract_sigma<-  extract(finMixData_fit)$sigma
+
+numIter<- 24000
+Lambda<-matrix(0, nrow =N, ncol=K)
+
+for ( i in 1:numIter){
+  cur_rho<- extract_rho[i,]
+  cur_mu<- extract_mu[i, ,]
+  cur_theta<- extract_theta[i, ,]
+  cur_sigma<- extract_sigma[i, , ,]
+  K<-length(cur_rho)
+  Kappa<-matrix(0, nrow=N, ncol=K)
+  inv_sigma <- vector("list", length=K)
+  
+  for (k in 1:K){
+    inv_sigma[[k]] <- solveV(cur_sigma[k,,], ldV=TRUE)
+  }
+  
+  log_det <- sapply(inv_sigma, FUN=function(z){ z$ldV })
+  log_rho <- log(cur_rho)
+  
+  for (j in 1:N){
+    for (k in 1:K){
+      temp <- as.matrix(cur_theta[j, ] - cur_mu[k, ])
+      Kappa[j, k] <- log_rho[k] - (t(temp) %*% inv_sigma[[k]]$y %*% temp + log_det[k]) / 2
+    }
+  }
+    
+  cur_Lambda<- exp(Kappa)
+  
+  if ( sum(is.nan(cur_Lambda)) > 0){
+    print("NaN found.")
+    stop() 
+  }
+  
+  cur_Lambda <- cur_Lambda / rowSums(cur_Lambda)
+  
+  Lambda <- Lambda + cur_Lambda
+  
+  #if(mod(i,120) == 0) print(i)
+}
+
+Lambda <- Lambda/ numIter
+
+fitted_clustersRSTAN <- numeric(length=N)
+for (i in 1:N){
+  fitted_clustersRSTAN[i] <- which.max(Lambda[i, ])
+}
+
+############################################################################
+real_rstan_cols <- rep(NA,N)
 real_gibbs_cols <- rep(NA,N)
 real_kmpp_cols <- rep(NA,N)
 # assigning colours to each cluster
@@ -633,16 +785,26 @@ real_kmpp_cols[fitted_clusters1 == 4] = "orange"
 real_kmpp_cols[fitted_clusters1 == 5] = "black"
 real_kmpp_cols[fitted_clusters1 == 6] = "purple"
 
+real_rstan_cols[fitted_clustersRSTAN == 1] = "red"
+real_rstan_cols[fitted_clustersRSTAN == 2] = "blue"
+real_rstan_cols[fitted_clustersRSTAN == 3] = "green"
+real_rstan_cols[fitted_clustersRSTAN == 4] = "orange"
+real_rstan_cols[fitted_clustersRSTAN == 5] = "black"
+real_rstan_cols[fitted_clustersRSTAN == 6] = "purple"
+
 # plot side-by-side pairs plots
-par(mfrow=c(1,2))
+par(mfrow=c(3,1))
 pairs(x = theta_hat,col = real_gibbs_cols, main = "Clusters determined by gibbs")
 pairs(x = theta_hat,col = real_kmpp_cols, main = "clusters determined by kmpp")
+pairs(x = theta_hat,col = real_rstan_cols, main = "clusters determined by RStan")
 par(mfrow=c(1,1))
 
 print("Distribution of cluster memberships determined by Gibbs Sampler")
 table(fitted_clusters)
 print("Distribution of cluster memberships determined by K-means++")
 table(fitted_clusters1)
+print("Distribution of cluster memberships determined by RStan Hamiltonian Based Model")
+table(fitted_clustersRSTAN)
 ```
 
 # References
