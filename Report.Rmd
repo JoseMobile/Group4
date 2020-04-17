@@ -389,5 +389,17 @@ Overall, this suggests that given the existing parameters, observations with par
 
 This does not rule out the possibility that hbe weight percentages or other variables can be used to group up microparticle trajectories, but for this to occur, latent variables would need be made known.
 
+# Discussion
 
+This paper proposes an alternative to model-based hierarchal clustering that does not utilize any EM algorithms, which become increasingly expensive, but rather opts for a Bayesian approach.
+
+By making some assumptions, we managed to reduce the complex problem of model-base hierarchal clustering into a simpler problem solved by a Gibbs Sampler.
+
+The main benefit to this is that our Gibbs Sampler method is computationally cheaper as we avoid inverting many large matrices yet still performs the same task of hierarchal clustering.
+
+However, as with all Bayesian analysis, our method requires arbitrarily selected prior distributions to begin. This makes any analysis done with this approach subjective.
+
+To showcase our method, we applied it onto the hbe dataset and compared it against k-means plus plus algorithm. The goal of this application is to see if the data can be clustered in such a way that each cluster corresponds to observations with a particular weight percentage. Through the results of both methods, we discovered that observations in the data could not be easily grouped into clusters distinguished by a particular weight percentage variable. This application does not assert the effectiveness of our proposed method or lack thereof.
+
+With that said, we outline one potential direction for research. One particular research direction would be construct similar clustering methods with different gibbs samplers that have different prior distributions and compare the performances against each other. The goal of this research would not be to determine which gibbs sampler method works best, but rather to discover what would be the most appropriate gibbs sampler for particular situations and document them. 
 
