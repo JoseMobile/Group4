@@ -370,7 +370,6 @@ solveV <- function(V, x, ldV = FALSE) {
     ldV <- 2 * sum(log(diag(C)))
     ans <- list(y = ans, ldV = ldV)
   }
-  
   ans
 }
 

@@ -1,0 +1,13 @@
+#' Human Bronchial Epithelial Data
+#'
+#' A dataset including the weight percent solids, 6 covariates, and Fisher information matricies for human mucus.
+#'
+#' @format A list containing 668 observations of HBE data with each element another list of 3 elements.
+#' \describe{
+#'   \item{coef}{numerical, 6 covariates collected on the mucus}
+#'   \item{wts}{numerical, Weight percent solids, 1p5 means 1.5 and 2p5 means 2.5}
+#'   \item{vcov}{matrix, covariance matrix of the 6 covariates}
+#' }
+#'
+#' @source Hill, David B et al. “A biophysical basis for mucus solids concentration as a candidate biomarker for airways disease.” PloS one vol. 9,2 e87681. 18 Feb. 2014, doi:10.1371/journal.pone.0087681
+"hbe"

@@ -205,7 +205,7 @@ update_Sigma <- function(y, theta, mu, old_Sigma, z, Omega, vK) {
   # replace empty cluster class Sigmas with the previous Sigma
   Sigma[,,replaceSigma] <- old_Sigma[,,replaceSigma]
   
-  return(Psi)
+  return(Sigma)
 }
 
 #' Samples cluster memberships probabilities from a Dirichlet distribution 

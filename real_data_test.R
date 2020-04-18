@@ -1,4 +1,6 @@
+
 source("gibbs-wrapper.R")
+
 
 hbe_fit <- readRDS("hbe-fbm_fit_v1.rds")
 N <- length(hbe_fit)
@@ -48,7 +50,7 @@ fit1 <- gibbsSampler(data=theta_hat, V=obs_info, burnin_period=1e3, numIter=1e4,
 
 fitted_clusters <- numeric(length=N)
 for (i in 1:N){
-  fitted_clusters[i] <- which.max(fit$Lambda[i, ])
+  fitted_clusters[i] <- which.max(fit1$Lambda[i, ])
 }
 
 err <- sum(cluster != fitted_clusters) / N
