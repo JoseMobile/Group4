@@ -100,15 +100,17 @@ param_list = list(param_init, param_init, param_init)
 
 finMixData <- list(K =K, N = N, p=p, V = reshapeV, Omega=reshapeOmega, vK = vK, Y=theta_hat )
 
-#Perform Sampling 
-#finMixData_fit <- sampling(finMix_mod, data = finMixData, iter = 10000, warmup=2000,
-                           #verbose = TRUE, chains = 3, init=param_list, control = list(max_treedepth = 10))
 
-#saveRDS(finMixData_fit, "fitMixDataStan.rds")
+### THIS WILL TAKE 5 + hours to run
+#Perform Sampling 
+finMixData_fit <- sampling(finMix_mod, data = finMixData, iter = 10000, warmup=2000,
+                           verbose = TRUE, chains = 3, init=param_list, control = list(max_treedepth = 10))
+
+saveRDS(finMixData_fit, "fitMixDataStan.rds")
 
 #################################  Checking for Convergence of Stan Model ############################################
 
-finMixData_fit<- readRDS("fitMixDataStan.rds")
+#finMixData_fit<- readRDS("fitMixDataStan.rds")
   
 print(finMixData_fit)
 
@@ -224,12 +226,30 @@ fullPost<-rep(0, num_sim)
 stanPost<-rep(0, num_sim)
 
 
+
+#' Log Sum Exp 
+#' More stable way to add a vector of loglilikelihood
+#'
+#'
+#'@param x vector of loglikelihoods to be added 
+#'@return scalar sum of loglikelihoods
 log_sum_exp <- function(x) {
   xmax <- max(x)
   log(sum(exp(x - xmax))) + xmax
 }
 
-
+#' New Complete Data Posterior of Multivariate Mixture Model (for RStan Comparison)
+#' 
+#' 
+#' @param Y An `N x p` matrix of observations, each of which is a column.
+#' @param vK A length- `K` vector of integers acting as virtual counts from prior 
+#' @param Omega A `p x p x K` matrix of variances corresponding to the variance of the prior chosen.
+#' @param V A `p x p x N` matrix of variances corresponding to each observation.
+#' @param rho A length-`K` probability vector of group membership.
+#' @param mu A `K x p` matrix of group means, where `K` is the number of mixture components and `p` is the dimension of each observation.
+#' @param Sigma A `p x p x K` matrix of group variances.
+#' @param theta A `N x p` matrix of observation means.
+#' @return full log data posterior of model 
 nnm2_post<-function(Y, vK, Omega, V, rho, mu, Sigma, theta){
   ll<-0
   ll<- ll + sum(diwish(Sigma, Omega , vK, log = TRUE))
@@ -249,6 +269,11 @@ nnm2_post<-function(Y, vK, Omega, V, rho, mu, Sigma, theta){
   ll
 }
 
+#' Get a new set of starting param values
+#' 
+#' 
+#' @param theta_hat  An `N x p` matrix of observations, each of which is a column.
+#' @return list of param initialization values using a different starting set of z's(from km++ algorithm)
 new_params<-function(theta_hat){
   initZ <- init_z(theta_hat, 6)
   count <- as.numeric(table(initZ))
@@ -283,8 +308,10 @@ new_params<-function(theta_hat){
   list(theta = theta_init, rho= rho_init, sigma=sigma_init, mu=mu_init)
 }
 
-# 
+
+# Perform Simulations 
 for(i in 1:num_sim){
+  
   #Create New Param Values (We have 4 params)
   new_data<- new_params(theta_hat)
   new_rho <- new_data$rho

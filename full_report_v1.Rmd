@@ -139,6 +139,7 @@ init_z <- function(y, K, max_iter = 10, nstart = 10) {
 set.seed(440)
 source("gibbs-wrapper.R")
 require(rstan)
+require(knitr)
 # install.packages("plot3D") # sometimes require() does not install the plot3D package, if so, run this line
 ```
 
@@ -456,16 +457,27 @@ pairs(x = theta_hat,col = real_kmpp_cols, main = "clusters determined by kmpp")
 pairs(x = theta_hat,col = real_rstan_cols, main = "clusters determined by RStan")
 ```
 
-```{r, echo=FALSE, cache=TRUE}
+### Distribution of cluster memberships determined by Gibbs Sampler:
+```{r, echo=FALSE, cache=FALSE}
 
-print("Distribution of cluster memberships determined by Gibbs Sampler")
-print(table(fitted_clusters))
-print("Distribution of cluster memberships determined by K-means++")
-print(table(fitted_clusters1))
-print("Distribution of cluster memberships determined by RStan Hamiltonian Based Model")
-print(table(fitted_clustersRSTAN))
+cluster = fitted_clusters
+knitr::kable(x = data.frame(GibbsSampler = table(cluster)), format = 'latex')
+
 ```
 
+### Distribution of cluster memberships determined by K-means++:
+```{r, echo=FALSE, cache=FALSE}
+
+cluster = fitted_clusters1
+knitr::kable(x = data.frame(KMeansPlusPlus = table(cluster)), format = 'latex')
+```
+
+### Distribution of cluster memberships determined by RStan Hamiltonian Based Model:
+```{r, echo=FALSE, cache=FALSE}
+
+cluster = fitted_clustersRSTAN
+knitr::kable(x = data.frame(RStan = table(cluster)), format = 'latex')
+```
 
 As expected, the clusters determined by all 3 algorithms overlap each other heavily.
 
